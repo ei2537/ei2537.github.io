@@ -1,40 +1,101 @@
 <!DOCTYPE html>
 <html lang="ja">
-<head>
-<meta charset="UTF-8">
-<title>あなたのＨＰタイトル</title>
-<meta name="keywords" content="ページのキーワードA,B,C">
-<meta name="description" content="ページの説明">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="stylesheet" href="main.css">
-</head>
-<body>
-<div id="outer">
-<div id="inner">
-<header><h1>あなたのＨＰタイトル</h1>
-</header>
-<main>
-<h2>記事ページ見出し・大</h2>
-<p>文章あれこれ</p>
-<h3>記事ページ見出し・中</h3>
-<p>文章あれこれ</p>
-<h4>記事ページ見出し・小</h4>
-<p>文章あれこれ</p>
-</main>
-<aside>
-<div class="title">menu</div>
-<ul>
-<li>記事ページへのリンク</li>
-<li>記事ページへのリンク</li>
-</ul>
-</aside>
-<footer>
-<div id="pagetop">
-<a href="#outer"><svg viewBox="0 0 24 24" width="24px" height="24px" xmlns="http://www.w3.org/2000/svg">
-<path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8z" fill="#999"/></svg></a>
-</div>
-© 2010 あなたのホームページ
-</footer>
-</div></div>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Myself</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="main.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <!-- Side Decorations -->
+    <div class="decor" aria-hidden="true">
+      <div class="side-blur left"></div>
+      <div class="side-blur right"></div>
+      <div class="side-particles left"></div>
+      <div class="side-particles right"></div>
+    </div>
+
+    <main id="content">
+      <!-- Hero -->
+      <div class="profile-container">
+        <div class="center-wrapper">
+          <img src="WaddleDee.JPG" alt="プロフィール画像" class="profile-img">
+          <h1 class="hero-title" style="margin-bottom: 40px;">間渕 颯太</h1>
+          <p class="intro-text">
+            馬と書く方のまぶち（馬渕）が多いらしく、よくそれと間違えられる。<br>
+            この前HAL名古屋に体験入学しに行ったら、何故か「間淵」と間違えられた。なんで。
+          </p>
+        </div>
+      </div>
+
+      <!-- more section -->
+      <section class="section reveal" id="main-info">
+        <div class="center-wrapper">
+          <h1 class="section-title">基本情報</h1>
+          <p class="sub-text">
+            2010年2月12日生まれ、A型。<br>
+            浜松市立湖東中学校出身。<br>
+            中学では吹奏楽部でTubaを担当。現在は情報処理部。<br>
+            座右の銘は「一芸は道に通ずる」。<br>
+          </p>
+        </div>
+      </section>
+
+      <section class="section reveal" id="hobby">
+        <div class="center-wrapper">
+          <h1 class="section-title">趣味</h1>
+          <p class="sub-text">
+            新しいことに挑戦するのが好きです。<br>
+            面白いこと見つけたら平気で10時間とかやります。<br>
+            最近は<a href="https://atcoder.jp/users/mabuchidayo" target="_blank" rel="noopener noreferrer" style="color:#428999;">AtCoder</a>で競プロしたり、<a href="https://www.ableton.com/ja/" target="_blank" rel="noopener noreferrer" style="color:#428999;">Ableton Live</a>で曲作ったりしてます。<br>
+          </p>
+        </div>
+      </section>
+
+      <section class="section reveal" id="favorite-things">
+        <div class="center-wrapper">
+          <h1 class="section-title">好きなもの</h1><br><br>
+          <h2 class="section-subtitle">ゲーム</h2>
+          <p class="sub-text">
+            カービィが好きです。エアライダーやりたいけどSwitch2ないのでできません。<br><br><br>
+            <img src="1.jpg" alt="カービィ" class="sub-img">
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer" role="contentinfo">
+      <div class="footer-inner">
+        <div class="footer-left">
+          <a class="brand" href="https://github.com/ei2537" target="_blank" rel="noopener noreferrer" aria-label="GitHub profile">
+            <!-- Octicon: mark-github -->
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path d="M8 0C3.58 0 0 3.73 0 8.33c0 3.68 2.29 6.8 5.47 7.9.4.08.55-.18.55-.4 0-.2 0-.87 0-1.58-2.01.45-2.53-.5-2.69-.96-.09-.23-.48-.96-.82-1.16-.28-.15-.68-.52 0-.53.63-.01 1.08.59 1.23.84.72 1.24 1.87.89 2.33.68.07-.54.28-.89.51-1.1-1.78-.2-3.64-.92-3.64-4.07 0-.9.31-1.64.82-2.22-.08-.2-.36-1.03.08-2.13 0 0 .67-.22 2.2.85.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.52-1.07 2.2-.85 2.2-.85.44 1.1.16 1.93.08 2.13.51.58.82 1.32.82 2.22 0 3.16-1.87 3.86-3.65 4.06.29.26.54.77.54 1.56 0 1.12 0 2.02 0 2.29 0 .22.15.49.55.4C13.71 15.13 16 12 16 8.33 16 3.73 12.42 0 8 0Z"/>
+            </svg>
+            <span class="brand-text">© 2025 ei2537</span>
+          </a>
+        </div>
+
+        <nav class="links" aria-label="Footer">
+          <a href="https://atcoder.jp/users/mabuchidayo" rel="nofollow">AtCoder</a>
+          <a href="https://x.com/ei2537" rel="nofollow">X</a>
+          <a href="https://qiita.com/ei2537" rel="nofollow">Qiita</a>
+          <a href="#" rel="nofollow">Security</a>
+          <a href="#" rel="nofollow">Status</a>
+          <a href="#" rel="nofollow">GitHub Community</a>
+          <a href="#" rel="nofollow">Docs</a>
+          <a href="#" rel="nofollow">Contact</a>
+          <a href="#" rel="nofollow">Manage cookies</a>
+        </nav>
+      </div>
+
+      <div class="footer-secondary">
+        <a href="#" class="secondary-link" rel="nofollow">Do not share my personal information</a>
+      </div>
+    </footer>
+    <script src="main.js"></script>
+  </body>
 </html>
