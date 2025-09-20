@@ -85,7 +85,6 @@ document.querySelectorAll(".reveal").forEach((el)=>observer.observe(el));
   //（1.5s + 0.3s ≒ 1.8s）
   setTimeout(once,1900);
 })();
-
 (function setCopyrightYear(){
   const y=document.getElementById('year');
   if (y) y.textContent=new Date().getFullYear();
