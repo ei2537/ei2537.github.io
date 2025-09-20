@@ -1,4 +1,4 @@
 #!/bin/bash
-echo "[Git] Getting chages for Repository..."
-git pull --rebase
+echo "[Git] Getting changes for Repository..."
+git pull --rebase origin main
 echo "[Git] Done."
