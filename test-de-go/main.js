@@ -21,19 +21,16 @@ const submitButton = document.getElementById('submit-button');
 const nextButton = document.getElementById('next-button');
 
 // --- グローバル変数 ---
-let loadedFiles = {}; // { "filename.txt": { "教科": [問題], ... }, ... }
-let allQuestionsBySubject = {}; // { "教科": [問題], ... }
+let loadedFiles = {};
+let allQuestionsBySubject = {};
 let quizQuestions = [];
 let currentQuestionIndex = 0;
 let userAnswer = '';
 
-// --- イベントリスナー ---
-
-// ファイル読み込み
+// --- イベントリスナー (変更なし) ---
 fileInput.addEventListener('change', (event) => {
     const files = event.target.files;
     if (files.length === 0) return;
-
     const filePromises = Array.from(files).map(file => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -46,7 +43,6 @@ fileInput.addEventListener('change', (event) => {
             reader.readAsText(file, 'UTF-8');
         });
     });
-
     Promise.all(filePromises).then(() => {
         rebuildAndRefreshUI();
     }).catch(error => {
@@ -55,24 +51,17 @@ fileInput.addEventListener('change', (event) => {
     });
     fileInput.value = '';
 });
-
-// スタートボタン
 startButton.addEventListener('click', () => {
     displaySubjectSelection();
     showScreen('subject-selection');
 });
-
-// 全選択チェックボックス
 selectAllSubjectsCheckbox.addEventListener('change', (event) => {
     const checkboxes = document.querySelectorAll('#subject-list input[type="checkbox"]');
     checkboxes.forEach(checkbox => checkbox.checked = event.target.checked);
 });
-
-// 問題開始ボタン
 startQuizButton.addEventListener('click', () => {
     const selectedSubjects = Array.from(document.querySelectorAll('#subject-list input[type="checkbox"]:checked'))
         .map(cb => cb.value);
-    
     if (selectedSubjects.length === 0) {
         alert('少なくとも1つの教科を選択してください。');
         return;
@@ -86,8 +75,6 @@ startQuizButton.addEventListener('click', () => {
     showScreen('quiz');
     displayQuestion();
 });
-
-// 判定・次の問題へボタン
 submitButton.addEventListener('click', checkAnswer);
 nextButton.addEventListener('click', () => {
     currentQuestionIndex++;
@@ -98,20 +85,12 @@ nextButton.addEventListener('click', () => {
     }
 });
 
-// --- 関数 ---
-
-/**
- * データとUIを再構築・再描画する
- */
+// --- 関数 (変更なし) ---
 function rebuildAndRefreshUI() {
     rebuildAllQuestions();
     updateFileListUI();
     updateFileStatus();
 }
-
-/**
- * 読み込まれた全ファイルから、教科別問題リスト(allQuestionsBySubject)を再構築する
- */
 function rebuildAllQuestions() {
     allQuestionsBySubject = {};
     for (const filename in loadedFiles) {
@@ -124,22 +103,14 @@ function rebuildAllQuestions() {
         }
     }
 }
-
-/**
- * 読み込み済みファイルリストのUIを更新する
- */
 function updateFileListUI() {
     fileListEl.innerHTML = '';
     const filenames = Object.keys(loadedFiles);
-
     if (filenames.length > 0) {
         fileListContainer.classList.remove('hidden');
         filenames.forEach(filename => {
             const li = document.createElement('li');
-            li.innerHTML = `
-                <span>${filename}</span>
-                <button class="delete-file-btn" title="このファイルを削除">&times;</button>
-            `;
+            li.innerHTML = `<span>${filename}</span><button class="delete-file-btn" title="このファイルを削除">&times;</button>`;
             li.querySelector('.delete-file-btn').onclick = () => handleDeleteFile(filename);
             fileListEl.appendChild(li);
         });
@@ -147,14 +118,9 @@ function updateFileListUI() {
         fileListContainer.classList.add('hidden');
     }
 }
-
-/**
- * ファイルステータスのメッセージとスタートボタンの状態を更新する
- */
 function updateFileStatus() {
     const totalSubjects = Object.keys(allQuestionsBySubject).length;
     const totalQuestions = Object.values(allQuestionsBySubject).flat().length;
-
     if (totalQuestions > 0) {
         fileStatusEl.textContent = `${Object.keys(loadedFiles).length}個のファイルから ${totalSubjects}教科 / ${totalQuestions}問 を読み込みました。`;
         startButton.disabled = false;
@@ -163,30 +129,17 @@ function updateFileStatus() {
         startButton.disabled = true;
     }
 }
-
-/**
- * 指定されたファイルを読み込みリストから削除する
- * @param {string} filename - 削除するファイル名
- */
 function handleDeleteFile(filename) {
     delete loadedFiles[filename];
     rebuildAndRefreshUI();
 }
-
-/**
- * mondai.txt の内容を解析して、教科ごとの問題オブジェクトを返す
- * @param {string} text - ファイルから読み込んだテキスト
- * @returns {object} { "教科名": [問題オブジェクト], ... }
- */
 function parseMondaiText(text) {
     const questionsBySubject = {};
     const lines = text.trim().split(/\r?\n/);
     let currentSubject = '未分類';
-
     lines.forEach(line => {
         line = line.trim();
         if (!line) return;
-
         if (line.startsWith('#')) {
             currentSubject = line.substring(1).trim();
         } else {
@@ -206,9 +159,6 @@ function parseMondaiText(text) {
     });
     return questionsBySubject;
 }
-
-
-/** 教科選択画面を生成・表示する */
 function displaySubjectSelection() {
     subjectListEl.innerHTML = '';
     const subjects = Object.keys(allQuestionsBySubject).sort();
@@ -223,8 +173,8 @@ function displaySubjectSelection() {
 }
 
 /**
+ * ★変更点: 問題表示ロジックを更新
  * 問題を表示する
- * ★★★ ここが変更点です ★★★
  */
 function displayQuestion() {
     feedbackAreaEl.innerHTML = '';
@@ -234,14 +184,13 @@ function displayQuestion() {
     const q = quizQuestions[currentQuestionIndex];
     questionNumberEl.textContent = `第 ${currentQuestionIndex + 1} 問 / 全 ${quizQuestions.length} 問`;
 
+    // questionTextEl は問題文専用とし、innerHTMLではなくtextContentを使うことで安全性を高める
+    questionTextEl.textContent = q.question;
+
     switch (q.type) {
         case 1: // 選択問題
-            questionTextEl.textContent = q.question;
-            
-            // 元の配列を壊さないように、選択肢の配列をコピーしてシャッフルする
             const shuffledChoices = [...q.choices];
             shuffleArray(shuffledChoices);
-            
             shuffledChoices.forEach(choice => {
                 const button = document.createElement('button');
                 button.textContent = choice;
@@ -255,37 +204,92 @@ function displayQuestion() {
             break;
 
         case 2: // 記述問題
-        case 3: // 穴埋め問題
-            questionTextEl.textContent = q.question;
             const input = document.createElement('input');
             input.type = 'text';
             input.placeholder = '答えを入力してください';
             choicesAreaEl.appendChild(input);
+            break;
+
+        case 3: // 穴埋め問題 (複数対応)
+            // questionTextElを一度クリアし、テキストと入力欄を動的に生成
+            questionTextEl.innerHTML = ''; 
+            choicesAreaEl.innerHTML = ''; // こちらは使用しないのでクリア
+            const parts = q.question.split('____');
+            parts.forEach((part, index) => {
+                questionTextEl.appendChild(document.createTextNode(part));
+                if (index < parts.length - 1) {
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'fill-in-blank'; // CSSでスタイルを適用
+                    questionTextEl.appendChild(input);
+                }
+            });
             break;
     }
     submitButton.classList.remove('hidden');
     nextButton.classList.add('hidden');
 }
 
-/** 解答をチェックする */
+/**
+ * ★変更点: 解答チェックとフィードバック表示のロジックを更新
+ * 解答をチェックする
+ */
 function checkAnswer() {
     const q = quizQuestions[currentQuestionIndex];
-    if (q.type === 1) { } 
-    else if (q.type === 2 || q.type === 3) {
+    let isCorrect = false;
+    const readableAnswer = q.answer.replace(/;/g, ', ');
+
+    // 1. ユーザーの解答を取得し、正誤を判定
+    if (q.type === 1) { // 選択問題
+        isCorrect = userAnswer.trim().toLowerCase() === q.answer.trim().toLowerCase();
+    } else if (q.type === 2) { // 記述問題
         userAnswer = choicesAreaEl.querySelector('input').value;
+        isCorrect = userAnswer.trim().toLowerCase() === q.answer.trim().toLowerCase();
+    } else if (q.type === 3) { // 穴埋め問題
+        const inputs = questionTextEl.querySelectorAll('input.fill-in-blank');
+        userAnswer = Array.from(inputs).map(input => input.value.trim()).join(';');
+        isCorrect = userAnswer.trim().toLowerCase() === q.answer.trim().toLowerCase();
     }
-    if (userAnswer.trim().toLowerCase() === q.answer.trim().toLowerCase()) {
-        feedbackAreaEl.textContent = `正解！ 答えは「${q.answer}」です。`;
+
+    // 2. 正解・不正解のテキストフィードバックを表示
+    if (isCorrect) {
+        feedbackAreaEl.textContent = `正解！ 答えは「${readableAnswer}」です。`;
         feedbackAreaEl.className = 'correct';
     } else {
-        feedbackAreaEl.textContent = `不正解... 正しい答えは「${q.answer}」です。`;
+        feedbackAreaEl.textContent = `不正解... 正しい答えは「${readableAnswer}」です。`;
         feedbackAreaEl.className = 'incorrect';
     }
+
+    // 3. ボタンや入力欄に視覚的なフィードバックを適用
+    if (q.type === 1) {
+        const choiceButtons = choicesAreaEl.querySelectorAll('button');
+        const selectedButton = choicesAreaEl.querySelector('button.selected');
+        
+        choiceButtons.forEach(btn => btn.disabled = true); // 全ての選択肢を無効化
+
+        if (isCorrect) {
+            if (selectedButton) selectedButton.classList.add('correct-choice'); // 正解なら選んだものを緑に
+        } else {
+            if (selectedButton) selectedButton.classList.add('incorrect-choice'); // 不正解なら選んだものを赤に
+            // 正解の選択肢を探して緑にする
+            choiceButtons.forEach(button => {
+                if (button.textContent.trim().toLowerCase() === q.answer.trim().toLowerCase()) {
+                    button.classList.add('correct-choice');
+                }
+            });
+        }
+    } else if (q.type === 2) {
+        choicesAreaEl.querySelector('input').disabled = true;
+    } else if (q.type === 3) {
+        questionTextEl.querySelectorAll('input.fill-in-blank').forEach(input => input.disabled = true);
+    }
+    
+    // 4. 判定/次の問題へボタンの表示を切り替え
     submitButton.classList.add('hidden');
     nextButton.classList.remove('hidden');
 }
 
-/** クイズ終了時の画面を表示 */
+// --- 画面表示・制御系の関数 (変更なし) ---
 function showEndOfQuiz() {
     questionNumberEl.textContent = 'お疲れ様でした！';
     questionTextEl.textContent = '全ての問題が終了しました。';
@@ -296,19 +300,12 @@ function showEndOfQuiz() {
     nextButton.textContent = '最初に戻る';
     nextButton.onclick = () => window.location.reload();
 }
-
-/**
- * 配列の要素をシャッフルする (Fisher-Yatesアルゴリズム)
- * @param {Array} array - シャッフルしたい配列
- */
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [array[i], array[j]] = [array[j], array[i]];
     }
 }
-
-/** 指定された画面コンテナのみ表示する */
 function showScreen(screenId) {
     startContainer.classList.add('hidden');
     subjectSelectionContainer.classList.add('hidden');

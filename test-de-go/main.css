@@ -147,3 +147,35 @@ body {
 #feedback-area { margin-top: 20px; padding: 15px; border-radius: 5px; font-size: 1.2em; font-weight: bold; text-align: center; }
 .correct { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
 .incorrect { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+/* 複数穴埋め問題の入力欄スタイル */
+#question-area input.fill-in-blank {
+    width: 120px;
+    padding: 3px 6px;
+    font-size: 0.95em;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    text-align: center;
+    margin: 0 4px;
+    display: inline-block; /* テキストと並べるため */
+}
+
+/* 選択問題の解答表示スタイル */
+#choices-area button.correct-choice,
+#choices-area button.correct-choice:hover {
+    background-color: #d4edda; /* 薄い緑 */
+    color: #155724;
+    border-color: #c3e6cb;
+    font-weight: bold;
+}
+
+#choices-area button.incorrect-choice,
+#choices-area button.incorrect-choice:hover {
+    background-color: #f8d7da; /* 薄い赤 */
+    color: #721c24;
+    border-color: #f5c6cb;
+}
+
+#choices-area button:disabled {
+    cursor: default;
+}
