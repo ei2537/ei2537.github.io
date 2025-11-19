@@ -24,10 +24,9 @@ let quizQuestions = [];
 let currentQuestionIndex = 0;
 let userAnswer = '';
 
-// ===== ここから追加 =====
 // --- 更新履歴データ ---
-// 新しい履歴は、この配列の先頭に追加してください
 const updateHistory = [
+    { date: '2025/11/20', content: '重複した問題を自動的に除外する機能を追加しました。' },
     { date: '2025/11/19', content: '記述・穴埋め問題で複数の正解を許容するようにしました。ダウンロード機能と更新履歴表示を追加しました。' },
     { date: '2025/11/18', content: '選択問題の解答表示を改善し、複数箇所の穴埋め問題に対応しました。' },
     { date: '2025/11/17', content: '選択肢のシャッフル機能を追加しました。' },
@@ -40,25 +39,17 @@ document.addEventListener('DOMContentLoaded', () => {
     renderUpdateHistory();
 });
 
-/**
- * 更新履歴をHTMLに描画する関数
- */
 function renderUpdateHistory() {
     const historyListEl = document.getElementById('history-list');
     if (!historyListEl) return;
-    
     updateHistory.forEach(item => {
         const li = document.createElement('li');
-        li.innerHTML = `
-            <span class="history-date">${item.date}</span>
-            <span class="history-content">${item.content}</span>
-        `;
+        li.innerHTML = `<span class="history-date">${item.date}</span><span class="history-content">${item.content}</span>`;
         historyListEl.appendChild(li);
     });
 }
-// ===== ここまで追加 =====
 
-// --- イベントリスナー ---
+// --- イベントリスナー (変更なし) ---
 fileInput.addEventListener('change', (event) => {
     const files = event.target.files; if (files.length === 0) return;
     const filePromises = Array.from(files).map(file => {
@@ -100,16 +91,38 @@ nextButton.addEventListener('click', () => {
 
 // --- 関数 ---
 function rebuildAndRefreshUI() { rebuildAllQuestions(); updateFileListUI(); updateFileStatus(); }
+
+/**
+ * ★変更点: 重複排除ロジックを追加
+ * 読み込まれた全ファイルから、教科別問題リスト(allQuestionsBySubject)を再構築する
+ */
 function rebuildAllQuestions() {
     allQuestionsBySubject = {};
+    const uniqueQuestionKeys = new Set(); // 既に追加した問題を記録するためのSet
+
     for (const filename in loadedFiles) {
         const subjectsInFile = loadedFiles[filename];
         for (const subject in subjectsInFile) {
-            if (!allQuestionsBySubject[subject]) { allQuestionsBySubject[subject] = []; }
-            allQuestionsBySubject[subject].push(...subjectsInFile[subject]);
+            if (!allQuestionsBySubject[subject]) {
+                allQuestionsBySubject[subject] = [];
+            }
+
+            subjectsInFile[subject].forEach(q => {
+                // 問題のユニークなキーを生成
+                // 選択問題は選択肢の順序が違っても同じ問題とみなすため、ソートしてからキーにする
+                const choicesKey = q.type === 1 ? [...q.choices].sort().join(';') : '';
+                const questionKey = `${q.type}|${q.question}|${choicesKey}|${q.answer}`;
+
+                // このキーがまだSetになければ、新しい問題として追加
+                if (!uniqueQuestionKeys.has(questionKey)) {
+                    uniqueQuestionKeys.add(questionKey); // キーをSetに記録
+                    allQuestionsBySubject[subject].push(q); // 問題をリストに追加
+                }
+            });
         }
     }
 }
+
 function updateFileListUI() {
     fileListEl.innerHTML = '';
     const filenames = Object.keys(loadedFiles);
@@ -169,7 +182,7 @@ function displaySubjectSelection() {
 }
 function displayQuestion() {
     feedbackAreaEl.innerHTML = ''; feedbackAreaEl.className = ''; choicesAreaEl.innerHTML = ''; userAnswer = '';
-    questionAreaEl.innerHTML = ''; // 問題エリアを初期化
+    questionAreaEl.innerHTML = '';
     const q = quizQuestions[currentQuestionIndex];
     questionNumberEl.textContent = `第 ${currentQuestionIndex + 1} 問 / 全 ${quizQuestions.length} 問`;
     
