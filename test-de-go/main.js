@@ -39,7 +39,7 @@ fileInput.addEventListener('change', (event) => {
             const reader = new FileReader();
             reader.onload = (e) => {
                 const parsedData = parseMondaiText(e.target.result);
-                loadedFiles[file.name] = parsedData; // ファイル名でデータを保存（上書きも可）
+                loadedFiles[file.name] = parsedData;
                 resolve();
             };
             reader.onerror = reject;
@@ -53,7 +53,7 @@ fileInput.addEventListener('change', (event) => {
         console.error("ファイルの読み込みに失敗しました:", error);
         fileStatusEl.textContent = "ファイルの読み込みに失敗しました。";
     });
-    fileInput.value = ''; // 同じファイルを連続で選択できるようにリセット
+    fileInput.value = '';
 });
 
 // スタートボタン
@@ -87,7 +87,7 @@ startQuizButton.addEventListener('click', () => {
     displayQuestion();
 });
 
-// 判定・次の問題へボタン (変更なし)
+// 判定・次の問題へボタン
 submitButton.addEventListener('click', checkAnswer);
 nextButton.addEventListener('click', () => {
     currentQuestionIndex++;
@@ -208,8 +208,6 @@ function parseMondaiText(text) {
 }
 
 
-// --- 画面表示・制御系の関数 (前回から大きな変更なし) ---
-
 /** 教科選択画面を生成・表示する */
 function displaySubjectSelection() {
     subjectListEl.innerHTML = '';
@@ -224,7 +222,10 @@ function displaySubjectSelection() {
     selectAllSubjectsCheckbox.checked = true;
 }
 
-/** 問題を表示する */
+/**
+ * 問題を表示する
+ * ★★★ ここが変更点です ★★★
+ */
 function displayQuestion() {
     feedbackAreaEl.innerHTML = '';
     feedbackAreaEl.className = '';
@@ -232,8 +233,9 @@ function displayQuestion() {
     userAnswer = '';
     const q = quizQuestions[currentQuestionIndex];
     questionNumberEl.textContent = `第 ${currentQuestionIndex + 1} 問 / 全 ${quizQuestions.length} 問`;
+
     switch (q.type) {
-        case 1:
+        case 1: // 選択問題
             questionTextEl.textContent = q.question;
             q.choices.forEach(choice => {
                 const button = document.createElement('button');
@@ -246,27 +248,33 @@ function displayQuestion() {
                 choicesAreaEl.appendChild(button);
             });
             break;
-        case 2:
+
+        case 2: // 記述問題
+        case 3: // 穴埋め問題  <-- タイプ3をタイプ2の処理に合流させました
             questionTextEl.textContent = q.question;
             const input = document.createElement('input');
             input.type = 'text';
             input.placeholder = '答えを入力してください';
             choicesAreaEl.appendChild(input);
             break;
-        case 3:
-            questionTextEl.innerHTML = q.question.replace('____', '<input type="text" id="fill-in-blank" placeholder="ここに入力">');
-            break;
     }
     submitButton.classList.remove('hidden');
     nextButton.classList.add('hidden');
 }
 
-/** 解答をチェックする */
+/**
+ * 解答をチェックする
+ * ★★★ ここが変更点です ★★★
+ */
 function checkAnswer() {
     const q = quizQuestions[currentQuestionIndex];
-    if (q.type === 1) {} 
-    else if (q.type === 2) { userAnswer = choicesAreaEl.querySelector('input').value; } 
-    else if (q.type === 3) { userAnswer = document.getElementById('fill-in-blank').value; }
+
+    if (q.type === 1) {
+        // userAnswer は選択肢ボタンクリック時に設定済み
+    } else if (q.type === 2 || q.type === 3) { // <-- タイプ3をタイプ2の処理に合流させました
+        userAnswer = choicesAreaEl.querySelector('input').value;
+    }
+
     if (userAnswer.trim().toLowerCase() === q.answer.trim().toLowerCase()) {
         feedbackAreaEl.textContent = `正解！ 答えは「${q.answer}」です。`;
         feedbackAreaEl.className = 'correct';
