@@ -9,17 +9,6 @@
 <body>
 
     <!-- スタート画面 -->
-    <div id="start-container" class="cont<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>テストでGO!</title>
-    <link rel="stylesheet" href="main.css">
-</head>
-<body>
-
-    <!-- スタート画面 -->
     <div id="start-container" class="container">
         <header class="header">
             <label for="file-input" class="file-label">ファイルを追加で読み込む</label>
@@ -53,77 +42,6 @@
                         </ul>
                     </div>
                 </div>
-            </div>
-            <!-- 右パネル (ファイルリスト) -->
-            <div id="file-list-container" class="start-right-panel hidden">
-                <h2>読み込んだファイル</h2>
-                <ul id="file-list">
-                    <!-- ここにファイルリストが動的に追加されます -->
-                </ul>
-            </div>
-        </div>
-    </div>
-
-    <!-- 教科選択画面 -->
-    <div id="subject-selection-container" class="container hidden">
-        <h2>教科を選択してください</h2>
-        <div id="subject-list"></div>
-        <div class="subject-actions">
-            <input type="checkbox" id="select-all-subjects">
-            <label for="select-all-subjects">すべて選択 / 解除</label>
-        </div>
-        <button id="start-quiz-button">問題を開始</button>
-    </div>
-
-    <!-- 問題画面 -->
-    <div id="quiz-container" class="container hidden">
-        <div id="question-number"></div>
-        <div id="question-area">
-            <!-- 穴埋め問題ではpタグではなく、ここ自体に要素が追加される -->
-        </div>
-        <div id="choices-area"></div>
-        <div id="feedback-area"></div>
-        <div id="button-area">
-            <button id="submit-button">決定</button>
-            <button id="next-button" class="hidden">次の問題へ</button>
-        </div>
-    </div>
-
-    <script src="main.js"></script>
-</body>
-</html>ainer">
-        <header class="header">
-            <label for="file-input" class="file-label">ファイルを追加で読み込む</label>
-            <input type="file" id="file-input" multiple accept=".txt" class="hidden">
-        </header>
-        <div class="start-main-content">
-            <!-- 左パネル -->
-            <div class="start-left-panel">
-                <div class="main-title-area">
-                    <h1>テストでGO!</h1>
-                    <p id="file-status">問題ファイルが読み込まれていません。</p>
-                    <button id="start-button" disabled>スタート</button>
-                </div>
-                
-                <!-- ===== ここから追加 ===== -->
-                <div class="info-section">
-                    <div id="download-section">
-                        <h2><span class="icon">📄</span>ファイル</h2>
-                        <ul id="download-list">
-                            <!-- GitHubのRawファイルのURLを指定 -->
-                            <li><a href="https://raw.githubusercontent.com/ei2537/test-de-go/main/mondai.txt" download="mondai.txt">サンプル問題 (mondai.txt)</a></li>
-                            <li><a href="https://raw.githubusercontent.com/ei2537/test-de-go/main/prompt.txt" download="prompt.txt">AI用プロンプト (prompt.txt)</a></li>
-                        </ul>
-                    </div>
-                    <div id="history-section">
-                        <h2><span class="icon">🔄</span>更新履歴</h2>
-                        <ul id="history-list">
-                            <!-- JavaScriptによって動的に生成されます -->
-                        </ul>
-                    </div>
-                </div>
-                <!-- ===== ここまで追加 ===== -->
-
             </div>
             <!-- 右パネル (ファイルリスト) -->
             <div id="file-list-container" class="start-right-panel hidden">
