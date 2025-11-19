@@ -13,7 +13,7 @@ body {
     border-radius: 10px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     width: 90%;
-    max-width: 800px; /* 横幅を少し広げます */
+    max-width: 800px;
     padding: 30px;
     box-sizing: border-box;
 }
@@ -45,19 +45,21 @@ body {
 }
 .start-left-panel {
     flex: 2;
-    text-align: center;
     display: flex;
     flex-direction: column;
-    justify-content: center;
 }
-.start-left-panel h1 {
+.main-title-area {
+    text-align: center;
+    flex-shrink: 0;
+}
+.main-title-area h1 {
     font-size: 2.5em;
     margin: 0 0 20px 0;
 }
 #file-status {
     color: #6c757d;
     margin-bottom: 40px;
-    min-height: 40px; /* メッセージの高さが変動してもレイアウトが崩れないように */
+    min-height: 40px;
 }
 #start-button {
     padding: 15px 40px;
@@ -105,7 +107,7 @@ body {
     margin-bottom: 5px;
     background-color: #f8f9fa;
     font-size: 0.95em;
-    word-break: break-all; /* ファイル名が長い場合に折り返す */
+    word-break: break-all;
 }
 .delete-file-btn {
     background: none;
@@ -121,8 +123,75 @@ body {
     color: #a71d2a;
 }
 
+/* ===== ここから追加 ===== */
+.info-section {
+    margin-top: 40px;
+    border-top: 1px solid #eee;
+    padding-top: 20px;
+    display: flex;
+    gap: 25px;
+    text-align: left;
+    flex-grow: 1;
+}
+#download-section, #history-section {
+    flex: 1;
+}
+.info-section h2 {
+    font-size: 1.1em;
+    color: #333;
+    margin-top: 0;
+    margin-bottom: 10px;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 5px;
+    display: inline-block;
+}
+.info-section .icon {
+    margin-right: 5px;
+}
+#download-list, #history-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+#download-list li a {
+    display: block;
+    padding: 8px 10px;
+    text-decoration: none;
+    color: #0056b3;
+    border-radius: 5px;
+    transition: background-color 0.2s;
+    font-size: 0.95em;
+}
+#download-list li a:hover {
+    background-color: #f0f2f5;
+    text-decoration: underline;
+}
+#history-list {
+    max-height: 150px;
+    overflow-y: auto;
+    font-size: 0.9em;
+}
+#history-list li {
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed #e0e0e0;
+}
+#history-list li:last-child {
+    border-bottom: none;
+}
+#history-list .history-date {
+    display: block;
+    font-weight: bold;
+    color: #555;
+    margin-bottom: 3px;
+}
+#history-list .history-content {
+    color: #333;
+    line-height: 1.5;
+}
+/* ===== ここまで追加 ===== */
 
-/* --- 教科選択 & 問題画面 (変更なし) --- */
+/* --- 教科選択 & 問題画面 --- */
 #subject-selection-container, #quiz-container { text-align: center; }
 #subject-selection-container h2 { margin-bottom: 25px; }
 #subject-list { text-align: left; max-height: 250px; overflow-y: auto; border: 1px solid #dee2e6; padding: 15px; border-radius: 5px; margin-bottom: 15px; }
@@ -133,7 +202,7 @@ body {
 #start-quiz-button:hover { background-color: #218838; }
 #quiz-container { text-align: left; }
 #question-number { font-size: 1.2em; font-weight: bold; color: #007bff; margin-bottom: 15px; }
-#question-area p { font-size: 1.4em; margin: 0 0 25px 0; line-height: 1.5; }
+#question-area { font-size: 1.4em; margin: 0 0 25px 0; line-height: 1.5; }
 #choices-area button { display: block; width: 100%; padding: 15px; margin-bottom: 10px; font-size: 1em; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; text-align: left; }
 #choices-area button:hover { background-color: #e9ecef; border-color: #ced4da; }
 #choices-area button.selected { background-color: #007bff; color: white; border-color: #007bff; }
@@ -150,32 +219,14 @@ body {
 
 /* 複数穴埋め問題の入力欄スタイル */
 #question-area input.fill-in-blank {
-    width: 120px;
-    padding: 3px 6px;
-    font-size: 0.95em;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    text-align: center;
-    margin: 0 4px;
-    display: inline-block; /* テキストと並べるため */
+    width: 120px; padding: 3px 6px; font-size: 0.95em; border: 1px solid #ced4da;
+    border-radius: 4px; text-align: center; margin: 0 4px; display: inline-block;
 }
-
 /* 選択問題の解答表示スタイル */
-#choices-area button.correct-choice,
-#choices-area button.correct-choice:hover {
-    background-color: #d4edda; /* 薄い緑 */
-    color: #155724;
-    border-color: #c3e6cb;
-    font-weight: bold;
+#choices-area button.correct-choice, #choices-area button.correct-choice:hover {
+    background-color: #d4edda; color: #155724; border-color: #c3e6cb; font-weight: bold;
 }
-
-#choices-area button.incorrect-choice,
-#choices-area button.incorrect-choice:hover {
-    background-color: #f8d7da; /* 薄い赤 */
-    color: #721c24;
-    border-color: #f5c6cb;
+#choices-area button.incorrect-choice, #choices-area button.incorrect-choice:hover {
+    background-color: #f8d7da; color: #721c24; border-color: #f5c6cb;
 }
-
-#choices-area button:disabled {
-    cursor: default;
-}
+#choices-area button:disabled { cursor: default; }
