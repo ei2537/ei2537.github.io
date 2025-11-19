@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>テストでGO!</title>
+    <title>テスト対策システム</title>
     <link rel="stylesheet" href="main.css">
 </head>
 <body>
@@ -11,29 +11,47 @@
     <!-- スタート画面 -->
     <div id="start-container" class="container">
         <header class="header">
-            <label for="file-input" class="file-label">ファイルを読み込む</label>
+            <label for="file-input" class="file-label">ファイルを追加で読み込む</label>
             <input type="file" id="file-input" multiple accept=".txt" class="hidden">
         </header>
         <div class="start-main-content">
             <!-- 左パネル -->
             <div class="start-left-panel">
-                <h1>テスト対策</h1>
-                <p id="file-status">問題ファイルが読み込まれていません。</p>
-                <button id="start-button" disabled>スタート</button>
+                <div class="main-title-area">
+                    <h1>テスト対策</h1>
+                    <p id="file-status">問題ファイルが読み込まれていません。</p>
+                    <button id="start-button" disabled>スタート</button>
+                </div>
+                
+                <!-- ★★★ ここから追加 ★★★ -->
+                <div class="info-section">
+                    <div id="download-section">
+                        <h2><span class="icon">📄</span>ファイル</h2>
+                        <ul id="download-list">
+                            <!-- GitHubのRawファイルのURLを指定 -->
+                            <li><a href="https://raw.githubusercontent.com/ei2537/test-de-go/main/mondai.txt" download="mondai.txt">サンプル問題 (mondai.txt)</a></li>
+                            <li><a href="https://raw.githubusercontent.com/ei2537/test-de-go/main/prompt.txt" download="prompt.txt">AI用プロンプト (prompt.txt)</a></li>
+                        </ul>
+                    </div>
+                    <div id="history-section">
+                        <h2><span class="icon">🔄</span>更新履歴</h2>
+                        <ul id="history-list">
+                            <!-- JavaScriptによって動的に生成されます -->
+                        </ul>
+                    </div>
+                </div>
+                <!-- ★★★ ここまで追加 ★★★ -->
             </div>
             <!-- 右パネル (ファイルリスト) -->
             <div id="file-list-container" class="start-right-panel hidden">
-                <h2>読み込んだファイル</h2>
-                <ul id="file-list">
-                    <!-- ここにファイルリストが動的に追加されます -->
-                </ul>
+                <h2>読み込み済みファイル</h2>
+                <ul id="file-list"></ul>
             </div>
         </div>
     </div>
 
-    <!-- 教科選択画面 -->
+    <!-- 教科選択画面 (変更なし) -->
     <div id="subject-selection-container" class="container hidden">
-        <!-- (変更なし) -->
         <h2>教科を選択してください</h2>
         <div id="subject-list"></div>
         <div class="subject-actions">
@@ -43,9 +61,8 @@
         <button id="start-quiz-button">問題を開始</button>
     </div>
 
-    <!-- 問題画面 -->
+    <!-- 問題画面 (変更なし) -->
     <div id="quiz-container" class="container hidden">
-        <!-- (変更なし) -->
         <div id="question-number"></div>
         <div id="question-area">
             <p id="question-text"></p>
@@ -53,7 +70,7 @@
         <div id="choices-area"></div>
         <div id="feedback-area"></div>
         <div id="button-area">
-            <button id="submit-button">決定</button>
+            <button id="submit-button">判定</button>
             <button id="next-button" class="hidden">次の問題へ</button>
         </div>
     </div>

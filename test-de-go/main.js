@@ -27,16 +27,49 @@ let quizQuestions = [];
 let currentQuestionIndex = 0;
 let userAnswer = '';
 
+// ★★★ ここから追加 ★★★
+// --- 更新履歴データ ---
+// 新しい履歴は、この配列の先頭に追加してください
+const updateHistory = [
+    { date: '2025/11/19', content: '記述・穴埋め問題で複数の正解を許容するようにしました。ダウンロード機能と更新履歴表示を追加しました。' },
+    { date: '2025/11/18', content: '選択問題の解答表示を改善し、複数箇所の穴埋め問題に対応しました。' },
+    { date: '2025/11/17', content: '選択肢のシャッフル機能を追加しました。' },
+    { date: '2025/11/16', content: 'ファイル読み込み機能、教科選択機能、問題シャッフル機能などを追加しました。' },
+    { date: '2025/11/15', content: '基本的な問題システムを構築しました。' },
+];
+
+// --- 初期化処理 ---
+document.addEventListener('DOMContentLoaded', () => {
+    renderUpdateHistory();
+});
+
+/**
+ * 更新履歴をHTMLに描画する関数
+ */
+function renderUpdateHistory() {
+    const historyListEl = document.getElementById('history-list');
+    if (!historyListEl) return;
+    
+    updateHistory.forEach(item => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <span class="history-date">${item.date}</span>
+            <span class="history-content">${item.content}</span>
+        `;
+        historyListEl.appendChild(li);
+    });
+}
+// ★★★ ここまで追加 ★★★
+
+
 // --- イベントリスナー (変更なし) ---
 fileInput.addEventListener('change', (event) => {
-    const files = event.target.files;
-    if (files.length === 0) return;
+    const files = event.target.files; if (files.length === 0) return;
     const filePromises = Array.from(files).map(file => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
-                const parsedData = parseMondaiText(e.target.result);
-                loadedFiles[file.name] = parsedData;
+                loadedFiles[file.name] = parseMondaiText(e.target.result);
                 resolve();
             };
             reader.onerror = reject;
@@ -45,31 +78,19 @@ fileInput.addEventListener('change', (event) => {
     });
     Promise.all(filePromises).then(() => {
         rebuildAndRefreshUI();
-    }).catch(error => {
-        console.error("ファイルの読み込みに失敗しました:", error);
-        fileStatusEl.textContent = "ファイルの読み込みに失敗しました。";
-    });
+    }).catch(error => { console.error("ファイルの読み込みに失敗しました:", error); fileStatusEl.textContent = "ファイルの読み込みに失敗しました。"; });
     fileInput.value = '';
 });
-startButton.addEventListener('click', () => {
-    displaySubjectSelection();
-    showScreen('subject-selection');
-});
+startButton.addEventListener('click', () => { displaySubjectSelection(); showScreen('subject-selection'); });
 selectAllSubjectsCheckbox.addEventListener('change', (event) => {
     const checkboxes = document.querySelectorAll('#subject-list input[type="checkbox"]');
     checkboxes.forEach(checkbox => checkbox.checked = event.target.checked);
 });
 startQuizButton.addEventListener('click', () => {
-    const selectedSubjects = Array.from(document.querySelectorAll('#subject-list input[type="checkbox"]:checked'))
-        .map(cb => cb.value);
-    if (selectedSubjects.length === 0) {
-        alert('少なくとも1つの教科を選択してください。');
-        return;
-    }
+    const selectedSubjects = Array.from(document.querySelectorAll('#subject-list input[type="checkbox"]:checked')).map(cb => cb.value);
+    if (selectedSubjects.length === 0) { alert('少なくとも1つの教科を選択してください。'); return; }
     quizQuestions = [];
-    selectedSubjects.forEach(subject => {
-        quizQuestions.push(...allQuestionsBySubject[subject]);
-    });
+    selectedSubjects.forEach(subject => { quizQuestions.push(...allQuestionsBySubject[subject]); });
     shuffleArray(quizQuestions);
     currentQuestionIndex = 0;
     showScreen('quiz');
@@ -78,27 +99,17 @@ startQuizButton.addEventListener('click', () => {
 submitButton.addEventListener('click', checkAnswer);
 nextButton.addEventListener('click', () => {
     currentQuestionIndex++;
-    if (currentQuestionIndex < quizQuestions.length) {
-        displayQuestion();
-    } else {
-        showEndOfQuiz();
-    }
+    if (currentQuestionIndex < quizQuestions.length) { displayQuestion(); } else { showEndOfQuiz(); }
 });
 
 // --- 関数 (変更なし) ---
-function rebuildAndRefreshUI() {
-    rebuildAllQuestions();
-    updateFileListUI();
-    updateFileStatus();
-}
+function rebuildAndRefreshUI() { rebuildAllQuestions(); updateFileListUI(); updateFileStatus(); }
 function rebuildAllQuestions() {
     allQuestionsBySubject = {};
     for (const filename in loadedFiles) {
         const subjectsInFile = loadedFiles[filename];
         for (const subject in subjectsInFile) {
-            if (!allQuestionsBySubject[subject]) {
-                allQuestionsBySubject[subject] = [];
-            }
+            if (!allQuestionsBySubject[subject]) { allQuestionsBySubject[subject] = []; }
             allQuestionsBySubject[subject].push(...subjectsInFile[subject]);
         }
     }
@@ -114,9 +125,7 @@ function updateFileListUI() {
             li.querySelector('.delete-file-btn').onclick = () => handleDeleteFile(filename);
             fileListEl.appendChild(li);
         });
-    } else {
-        fileListContainer.classList.add('hidden');
-    }
+    } else { fileListContainer.classList.add('hidden'); }
 }
 function updateFileStatus() {
     const totalSubjects = Object.keys(allQuestionsBySubject).length;
@@ -129,29 +138,21 @@ function updateFileStatus() {
         startButton.disabled = true;
     }
 }
-function handleDeleteFile(filename) {
-    delete loadedFiles[filename];
-    rebuildAndRefreshUI();
-}
+function handleDeleteFile(filename) { delete loadedFiles[filename]; rebuildAndRefreshUI(); }
 function parseMondaiText(text) {
     const questionsBySubject = {};
     const lines = text.trim().split(/\r?\n/);
     let currentSubject = '未分類';
     lines.forEach(line => {
-        line = line.trim();
-        if (!line) return;
+        line = line.trim(); if (!line) return;
         if (line.startsWith('#')) {
             currentSubject = line.substring(1).trim();
         } else {
-            const parts = line.split('|');
-            if (parts.length < 4) return;
+            const parts = line.split('|'); if (parts.length < 4) return;
             const [type, question, choices, answer] = parts;
-            if (!questionsBySubject[currentSubject]) {
-                questionsBySubject[currentSubject] = [];
-            }
+            if (!questionsBySubject[currentSubject]) { questionsBySubject[currentSubject] = []; }
             questionsBySubject[currentSubject].push({
-                type: parseInt(type, 10),
-                question: question.trim(),
+                type: parseInt(type, 10), question: question.trim(),
                 choices: choices ? choices.split(';').map(c => c.trim()) : [],
                 answer: answer.trim()
             });
@@ -164,94 +165,66 @@ function displaySubjectSelection() {
     const subjects = Object.keys(allQuestionsBySubject).sort();
     subjects.forEach(subject => {
         const itemCount = allQuestionsBySubject[subject].length;
-        const div = document.createElement('div');
-        div.className = 'subject-item';
+        const div = document.createElement('div'); div.className = 'subject-item';
         div.innerHTML = `<label><input type="checkbox" value="${subject}" checked> ${subject} (${itemCount}問)</label>`;
         subjectListEl.appendChild(div);
     });
     selectAllSubjectsCheckbox.checked = true;
 }
-
-/**
- * ★変更点: 問題表示ロジックを更新
- * 問題を表示する
- */
 function displayQuestion() {
-    feedbackAreaEl.innerHTML = '';
-    feedbackAreaEl.className = '';
-    choicesAreaEl.innerHTML = '';
-    userAnswer = '';
+    feedbackAreaEl.innerHTML = ''; feedbackAreaEl.className = ''; choicesAreaEl.innerHTML = ''; userAnswer = '';
     const q = quizQuestions[currentQuestionIndex];
     questionNumberEl.textContent = `第 ${currentQuestionIndex + 1} 問 / 全 ${quizQuestions.length} 問`;
-
-    // questionTextEl は問題文専用とし、innerHTMLではなくtextContentを使うことで安全性を高める
     questionTextEl.textContent = q.question;
-
     switch (q.type) {
-        case 1: // 選択問題
-            const shuffledChoices = [...q.choices];
-            shuffleArray(shuffledChoices);
+        case 1:
+            const shuffledChoices = [...q.choices]; shuffleArray(shuffledChoices);
             shuffledChoices.forEach(choice => {
-                const button = document.createElement('button');
-                button.textContent = choice;
+                const button = document.createElement('button'); button.textContent = choice;
                 button.onclick = () => {
                     Array.from(choicesAreaEl.children).forEach(btn => btn.classList.remove('selected'));
-                    button.classList.add('selected');
-                    userAnswer = choice;
+                    button.classList.add('selected'); userAnswer = choice;
                 };
                 choicesAreaEl.appendChild(button);
             });
             break;
-
-        case 2: // 記述問題
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.placeholder = '答えを入力してください';
+        case 2:
+            const input = document.createElement('input'); input.type = 'text'; input.placeholder = '答えを入力してください';
             choicesAreaEl.appendChild(input);
             break;
-
-        case 3: // 穴埋め問題 (複数対応)
-            // questionTextElを一度クリアし、テキストと入力欄を動的に生成
-            questionTextEl.innerHTML = ''; 
-            choicesAreaEl.innerHTML = ''; // こちらは使用しないのでクリア
+        case 3:
+            questionTextEl.innerHTML = ''; choicesAreaEl.innerHTML = '';
             const parts = q.question.split('____');
             parts.forEach((part, index) => {
                 questionTextEl.appendChild(document.createTextNode(part));
                 if (index < parts.length - 1) {
-                    const input = document.createElement('input');
-                    input.type = 'text';
-                    input.className = 'fill-in-blank'; // CSSでスタイルを適用
+                    const input = document.createElement('input'); input.type = 'text'; input.className = 'fill-in-blank';
                     questionTextEl.appendChild(input);
                 }
             });
             break;
     }
-    submitButton.classList.remove('hidden');
-    nextButton.classList.add('hidden');
+    submitButton.classList.remove('hidden'); nextButton.classList.add('hidden');
 }
-
-/**
- * ★変更点: 解答チェックとフィードバック表示のロジックを更新
- * 解答をチェックする
- */
 function checkAnswer() {
     const q = quizQuestions[currentQuestionIndex];
     let isCorrect = false;
-    const readableAnswer = q.answer.replace(/;/g, ', ');
-
-    // 1. ユーザーの解答を取得し、正誤を判定
-    if (q.type === 1) { // 選択問題
+    const readableAnswer = q.answer.replace(/;/g, ', ').replace(/,/g, ' または ');
+    if (q.type === 1) {
         isCorrect = userAnswer.trim().toLowerCase() === q.answer.trim().toLowerCase();
-    } else if (q.type === 2) { // 記述問題
-        userAnswer = choicesAreaEl.querySelector('input').value;
-        isCorrect = userAnswer.trim().toLowerCase() === q.answer.trim().toLowerCase();
-    } else if (q.type === 3) { // 穴埋め問題
-        const inputs = questionTextEl.querySelectorAll('input.fill-in-blank');
-        userAnswer = Array.from(inputs).map(input => input.value.trim()).join(';');
-        isCorrect = userAnswer.trim().toLowerCase() === q.answer.trim().toLowerCase();
+    } else if (q.type === 2) {
+        userAnswer = choicesAreaEl.querySelector('input').value.trim().toLowerCase();
+        const correctAnswers = q.answer.split(',').map(ans => ans.trim().toLowerCase());
+        isCorrect = correctAnswers.includes(userAnswer);
+    } else if (q.type === 3) {
+        const userAnswers = Array.from(questionTextEl.querySelectorAll('input.fill-in-blank')).map(input => input.value.trim().toLowerCase());
+        const correctAnswersByBlank = q.answer.split(';').map(ans => ans.trim().toLowerCase());
+        isCorrect = userAnswers.every((userAns, index) => {
+            if (correctAnswersByBlank[index] === undefined) return false;
+            const correctAlternatives = correctAnswersByBlank[index].split(',').map(alt => alt.trim().toLowerCase());
+            return correctAlternatives.includes(userAns);
+        });
     }
-
-    // 2. 正解・不正解のテキストフィードバックを表示
     if (isCorrect) {
         feedbackAreaEl.textContent = `正解！ 答えは「${readableAnswer}」です。`;
         feedbackAreaEl.className = 'correct';
@@ -259,19 +232,14 @@ function checkAnswer() {
         feedbackAreaEl.textContent = `不正解... 正しい答えは「${readableAnswer}」です。`;
         feedbackAreaEl.className = 'incorrect';
     }
-
-    // 3. ボタンや入力欄に視覚的なフィードバックを適用
     if (q.type === 1) {
         const choiceButtons = choicesAreaEl.querySelectorAll('button');
         const selectedButton = choicesAreaEl.querySelector('button.selected');
-        
-        choiceButtons.forEach(btn => btn.disabled = true); // 全ての選択肢を無効化
-
+        choiceButtons.forEach(btn => btn.disabled = true);
         if (isCorrect) {
-            if (selectedButton) selectedButton.classList.add('correct-choice'); // 正解なら選んだものを緑に
+            if (selectedButton) selectedButton.classList.add('correct-choice');
         } else {
-            if (selectedButton) selectedButton.classList.add('incorrect-choice'); // 不正解なら選んだものを赤に
-            // 正解の選択肢を探して緑にする
+            if (selectedButton) selectedButton.classList.add('incorrect-choice');
             choiceButtons.forEach(button => {
                 if (button.textContent.trim().toLowerCase() === q.answer.trim().toLowerCase()) {
                     button.classList.add('correct-choice');
@@ -283,19 +251,12 @@ function checkAnswer() {
     } else if (q.type === 3) {
         questionTextEl.querySelectorAll('input.fill-in-blank').forEach(input => input.disabled = true);
     }
-    
-    // 4. 判定/次の問題へボタンの表示を切り替え
-    submitButton.classList.add('hidden');
-    nextButton.classList.remove('hidden');
+    submitButton.classList.add('hidden'); nextButton.classList.remove('hidden');
 }
-
-// --- 画面表示・制御系の関数 (変更なし) ---
 function showEndOfQuiz() {
     questionNumberEl.textContent = 'お疲れ様でした！';
     questionTextEl.textContent = '全ての問題が終了しました。';
-    choicesAreaEl.innerHTML = '';
-    feedbackAreaEl.innerHTML = '';
-    feedbackAreaEl.className = '';
+    choicesAreaEl.innerHTML = ''; feedbackAreaEl.innerHTML = ''; feedbackAreaEl.className = '';
     submitButton.classList.add('hidden');
     nextButton.textContent = '最初に戻る';
     nextButton.onclick = () => window.location.reload();
