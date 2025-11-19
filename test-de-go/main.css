@@ -1,0 +1,122 @@
+body {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background-color: #f0f2f5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+}
+
+#quiz-container {
+    background-color: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    width: 90%;
+    max-width: 600px;
+    padding: 30px;
+    box-sizing: border-box;
+}
+
+#question-number {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #007bff;
+    margin-bottom: 15px;
+}
+
+#question-area p {
+    font-size: 1.4em;
+    margin: 0 0 25px 0;
+    line-height: 1.5;
+}
+
+#choices-area button {
+    display: block;
+    width: 100%;
+    padding: 15px;
+    margin-bottom: 10px;
+    font-size: 1em;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+#choices-area button:hover {
+    background-color: #e9ecef;
+    border-color: #ced4da;
+}
+
+#choices-area button.selected {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+#choices-area input[type="text"] {
+    display: block;
+    width: 100%;
+    padding: 15px;
+    font-size: 1em;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    box-sizing: border-box; /* paddingを含んだ幅計算 */
+}
+
+#button-area {
+    margin-top: 25px;
+    text-align: right;
+}
+
+#button-area button {
+    padding: 10px 25px;
+    font-size: 1em;
+    border-radius: 5px;
+    border: none;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#submit-button {
+    background-color: #28a745;
+}
+
+#submit-button:hover {
+    background-color: #218838;
+}
+
+#next-button {
+    background-color: #007bff;
+}
+
+#next-button:hover {
+    background-color: #0069d9;
+}
+
+.hidden {
+    display: none;
+}
+
+#feedback-area {
+    margin-top: 20px;
+    padding: 15px;
+    border-radius: 5px;
+    font-size: 1.2em;
+    font-weight: bold;
+    text-align: center;
+}
+
+.correct {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.incorrect {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
