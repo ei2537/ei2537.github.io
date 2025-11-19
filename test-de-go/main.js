@@ -237,7 +237,12 @@ function displayQuestion() {
     switch (q.type) {
         case 1: // 選択問題
             questionTextEl.textContent = q.question;
-            q.choices.forEach(choice => {
+            
+            // 元の配列を壊さないように、選択肢の配列をコピーしてシャッフルする
+            const shuffledChoices = [...q.choices];
+            shuffleArray(shuffledChoices);
+            
+            shuffledChoices.forEach(choice => {
                 const button = document.createElement('button');
                 button.textContent = choice;
                 button.onclick = () => {
@@ -250,7 +255,7 @@ function displayQuestion() {
             break;
 
         case 2: // 記述問題
-        case 3: // 穴埋め問題  <-- タイプ3をタイプ2の処理に合流させました
+        case 3: // 穴埋め問題
             questionTextEl.textContent = q.question;
             const input = document.createElement('input');
             input.type = 'text';
@@ -262,19 +267,13 @@ function displayQuestion() {
     nextButton.classList.add('hidden');
 }
 
-/**
- * 解答をチェックする
- * ★★★ ここが変更点です ★★★
- */
+/** 解答をチェックする */
 function checkAnswer() {
     const q = quizQuestions[currentQuestionIndex];
-
-    if (q.type === 1) {
-        // userAnswer は選択肢ボタンクリック時に設定済み
-    } else if (q.type === 2 || q.type === 3) { // <-- タイプ3をタイプ2の処理に合流させました
+    if (q.type === 1) { } 
+    else if (q.type === 2 || q.type === 3) {
         userAnswer = choicesAreaEl.querySelector('input').value;
     }
-
     if (userAnswer.trim().toLowerCase() === q.answer.trim().toLowerCase()) {
         feedbackAreaEl.textContent = `正解！ 答えは「${q.answer}」です。`;
         feedbackAreaEl.className = 'correct';
@@ -298,7 +297,10 @@ function showEndOfQuiz() {
     nextButton.onclick = () => window.location.reload();
 }
 
-/** 配列の要素をシャッフルする */
+/**
+ * 配列の要素をシャッフルする (Fisher-Yatesアルゴリズム)
+ * @param {Array} array - シャッフルしたい配列
+ */
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
