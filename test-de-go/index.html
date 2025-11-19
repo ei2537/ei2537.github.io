@@ -3,22 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>テスト対策問題システム</title>
+    <title>テスト対策システム</title>
     <link rel="stylesheet" href="main.css">
 </head>
 <body>
 
-    <div id="quiz-container">
+    <!-- スタート画面 -->
+    <div id="start-container" class="container">
+        <header class="header">
+            <label for="file-input" class="file-label">ファイルを読み込む</label>
+            <input type="file" id="file-input" multiple accept=".txt" class="hidden">
+        </header>
+        <div class="content">
+            <h1>テスト対策</h1>
+            <p id="file-status">問題ファイルが読み込まれていません。</p>
+            <button id="start-button" disabled>スタート</button>
+        </div>
+    </div>
+
+    <!-- 教科選択画面 -->
+    <div id="subject-selection-container" class="container hidden">
+        <h2>教科を選択してください</h2>
+        <div id="subject-list">
+            <!-- 教科のチェックボックスがここに動的に生成されます -->
+        </div>
+        <div class="subject-actions">
+            <input type="checkbox" id="select-all-subjects">
+            <label for="select-all-subjects">すべて選択 / 解除</label>
+        </div>
+        <button id="start-quiz-button">問題を開始</button>
+    </div>
+
+    <!-- 問題画面 -->
+    <div id="quiz-container" class="container hidden">
         <div id="question-number"></div>
         <div id="question-area">
             <p id="question-text"></p>
         </div>
-        <div id="choices-area">
-            <!-- 選択肢や入力欄がここに動的に生成されます -->
-        </div>
-        <div id="feedback-area">
-            <!-- 正解・不正解のフィードバックがここに表示されます -->
-        </div>
+        <div id="choices-area"></div>
+        <div id="feedback-area"></div>
         <div id="button-area">
             <button id="submit-button">判定</button>
             <button id="next-button" class="hidden">次の問題へ</button>
