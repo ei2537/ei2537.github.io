@@ -13,10 +13,9 @@ body {
     border-radius: 10px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     width: 90%;
-    max-width: 600px;
+    max-width: 800px; /* 横幅を少し広げます */
     padding: 30px;
     box-sizing: border-box;
-    text-align: center;
 }
 
 .hidden {
@@ -39,14 +38,26 @@ body {
 .file-label:hover {
     background-color: #5a6268;
 }
-#start-container .content h1 {
+.start-main-content {
+    display: flex;
+    gap: 30px;
+    margin-top: 20px;
+}
+.start-left-panel {
+    flex: 2;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.start-left-panel h1 {
     font-size: 2.5em;
-    margin-top: 40px;
-    margin-bottom: 20px;
+    margin: 0 0 20px 0;
 }
 #file-status {
     color: #6c757d;
     margin-bottom: 40px;
+    min-height: 40px; /* メッセージの高さが変動してもレイアウトが崩れないように */
 }
 #start-button {
     padding: 15px 40px;
@@ -57,6 +68,7 @@ body {
     border-radius: 5px;
     cursor: pointer;
     transition: background-color 0.2s;
+    align-self: center;
 }
 #start-button:disabled {
     background-color: #cccccc;
@@ -66,90 +78,72 @@ body {
     background-color: #0056b3;
 }
 
-/* --- 教科選択画面 --- */
-#subject-selection-container h2 {
-    margin-bottom: 25px;
-}
-#subject-list {
+.start-right-panel {
+    flex: 1.5;
+    border-left: 1px solid #dee2e6;
+    padding-left: 30px;
     text-align: left;
+}
+#file-list-container h2 {
+    margin-top: 0;
+    font-size: 1.2em;
+    color: #333;
+}
+#file-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
     max-height: 250px;
     overflow-y: auto;
-    border: 1px solid #dee2e6;
-    padding: 15px;
+}
+#file-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
     border-radius: 5px;
-    margin-bottom: 15px;
+    margin-bottom: 5px;
+    background-color: #f8f9fa;
+    font-size: 0.95em;
+    word-break: break-all; /* ファイル名が長い場合に折り返す */
 }
-.subject-item {
-    display: block;
-    margin-bottom: 10px;
-    font-size: 1.1em;
-}
-.subject-item input {
-    margin-right: 10px;
-}
-.subject-actions {
-    text-align: left;
-    margin-bottom: 25px;
-}
-#start-quiz-button {
-    padding: 12px 30px;
-    font-size: 1.1em;
-    background-color: #28a745;
-    color: white;
+.delete-file-btn {
+    background: none;
     border: none;
-    border-radius: 5px;
+    color: #dc3545;
     cursor: pointer;
-    transition: background-color 0.2s;
-}
-#start-quiz-button:hover {
-    background-color: #218838;
-}
-
-
-/* --- 問題画面 --- */
-#quiz-container {
-    text-align: left;
-}
-#question-number {
-    font-size: 1.2em;
-    font-weight: bold;
-    color: #007bff;
-    margin-bottom: 15px;
-}
-#question-area p {
     font-size: 1.4em;
-    margin: 0 0 25px 0;
-    line-height: 1.5;
+    font-weight: bold;
+    padding: 0 5px;
+    margin-left: 10px;
 }
-#choices-area button {
-    display: block; width: 100%; padding: 15px; margin-bottom: 10px; font-size: 1em;
-    background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px;
-    cursor: pointer; transition: background-color 0.2s, border-color 0.2s; text-align: left;
+.delete-file-btn:hover {
+    color: #a71d2a;
 }
-#choices-area button:hover {
-    background-color: #e9ecef; border-color: #ced4da;
-}
-#choices-area button.selected {
-    background-color: #007bff; color: white; border-color: #007bff;
-}
-#choices-area input[type="text"] {
-    display: block; width: 100%; padding: 15px; font-size: 1em;
-    border: 1px solid #ced4da; border-radius: 5px; box-sizing: border-box;
-}
-#button-area {
-    margin-top: 25px; text-align: right;
-}
-#button-area button {
-    padding: 10px 25px; font-size: 1em; border-radius: 5px;
-    border: none; color: white; cursor: pointer; transition: background-color 0.2s;
-}
+
+
+/* --- 教科選択 & 問題画面 (変更なし) --- */
+#subject-selection-container, #quiz-container { text-align: center; }
+#subject-selection-container h2 { margin-bottom: 25px; }
+#subject-list { text-align: left; max-height: 250px; overflow-y: auto; border: 1px solid #dee2e6; padding: 15px; border-radius: 5px; margin-bottom: 15px; }
+.subject-item { display: block; margin-bottom: 10px; font-size: 1.1em; }
+.subject-item input { margin-right: 10px; }
+.subject-actions { text-align: left; margin-bottom: 25px; }
+#start-quiz-button { padding: 12px 30px; font-size: 1.1em; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; transition: background-color 0.2s; }
+#start-quiz-button:hover { background-color: #218838; }
+#quiz-container { text-align: left; }
+#question-number { font-size: 1.2em; font-weight: bold; color: #007bff; margin-bottom: 15px; }
+#question-area p { font-size: 1.4em; margin: 0 0 25px 0; line-height: 1.5; }
+#choices-area button { display: block; width: 100%; padding: 15px; margin-bottom: 10px; font-size: 1em; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; text-align: left; }
+#choices-area button:hover { background-color: #e9ecef; border-color: #ced4da; }
+#choices-area button.selected { background-color: #007bff; color: white; border-color: #007bff; }
+#choices-area input[type="text"] { display: block; width: 100%; padding: 15px; font-size: 1em; border: 1px solid #ced4da; border-radius: 5px; box-sizing: border-box; }
+#button-area { margin-top: 25px; text-align: right; }
+#button-area button { padding: 10px 25px; font-size: 1em; border-radius: 5px; border: none; color: white; cursor: pointer; transition: background-color 0.2s; }
 #submit-button { background-color: #28a745; }
 #submit-button:hover { background-color: #218838; }
 #next-button { background-color: #007bff; }
 #next-button:hover { background-color: #0069d9; }
-#feedback-area {
-    margin-top: 20px; padding: 15px; border-radius: 5px;
-    font-size: 1.2em; font-weight: bold; text-align: center;
-}
+#feedback-area { margin-top: 20px; padding: 15px; border-radius: 5px; font-size: 1.2em; font-weight: bold; text-align: center; }
 .correct { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
 .incorrect { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
