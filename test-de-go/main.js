@@ -26,6 +26,7 @@ let userAnswer = '';
 
 // --- 更新履歴データ ---
 const updateHistory = [
+    { date: '2025/11/21', content: '順不同の複数穴埋め問題（タイプ4）に対応し、解答表示を修正しました。' },
     { date: '2025/11/20', content: '重複した問題を自動的に除外する機能を追加しました。' },
     { date: '2025/11/19', content: '記述・穴埋め問題で複数の正解を許容するようにしました。ダウンロード機能と更新履歴表示を追加しました。' },
     { date: '2025/11/18', content: '選択問題の解答表示を改善し、複数箇所の穴埋め問題に対応しました。' },
@@ -49,7 +50,7 @@ function renderUpdateHistory() {
     });
 }
 
-// --- イベントリスナー (変更なし) ---
+// --- イベントリスナー ---
 fileInput.addEventListener('change', (event) => {
     const files = event.target.files; if (files.length === 0) return;
     const filePromises = Array.from(files).map(file => {
@@ -92,37 +93,26 @@ nextButton.addEventListener('click', () => {
 // --- 関数 ---
 function rebuildAndRefreshUI() { rebuildAllQuestions(); updateFileListUI(); updateFileStatus(); }
 
-/**
- * ★変更点: 重複排除ロジックを追加
- * 読み込まれた全ファイルから、教科別問題リスト(allQuestionsBySubject)を再構築する
- */
 function rebuildAllQuestions() {
     allQuestionsBySubject = {};
-    const uniqueQuestionKeys = new Set(); // 既に追加した問題を記録するためのSet
-
+    const uniqueQuestionKeys = new Set();
     for (const filename in loadedFiles) {
         const subjectsInFile = loadedFiles[filename];
         for (const subject in subjectsInFile) {
             if (!allQuestionsBySubject[subject]) {
                 allQuestionsBySubject[subject] = [];
             }
-
             subjectsInFile[subject].forEach(q => {
-                // 問題のユニークなキーを生成
-                // 選択問題は選択肢の順序が違っても同じ問題とみなすため、ソートしてからキーにする
                 const choicesKey = q.type === 1 ? [...q.choices].sort().join(';') : '';
                 const questionKey = `${q.type}|${q.question}|${choicesKey}|${q.answer}`;
-
-                // このキーがまだSetになければ、新しい問題として追加
                 if (!uniqueQuestionKeys.has(questionKey)) {
-                    uniqueQuestionKeys.add(questionKey); // キーをSetに記録
-                    allQuestionsBySubject[subject].push(q); // 問題をリストに追加
+                    uniqueQuestionKeys.add(questionKey);
+                    allQuestionsBySubject[subject].push(q);
                 }
             });
         }
     }
 }
-
 function updateFileListUI() {
     fileListEl.innerHTML = '';
     const filenames = Object.keys(loadedFiles);
@@ -160,6 +150,7 @@ function parseMondaiText(text) {
             const parts = line.split('|'); if (parts.length < 4) return;
             const [type, question, choices, answer] = parts;
             if (!questionsBySubject[currentSubject]) { questionsBySubject[currentSubject] = []; }
+            // ★★★ 新しい問題形式をパースできるように type を追加 ★★★
             questionsBySubject[currentSubject].push({
                 type: parseInt(type, 10), question: question.trim(),
                 choices: choices ? choices.split(';').map(c => c.trim()) : [],
@@ -209,6 +200,7 @@ function displayQuestion() {
             }
             break;
         case 3:
+        case 4: // ★★★ タイプ4もタイプ3と同じ表示方法 ★★★
             const parts = q.question.split('____');
             parts.forEach((part, index) => {
                 questionAreaEl.appendChild(document.createTextNode(part));
@@ -221,27 +213,52 @@ function displayQuestion() {
     }
     submitButton.classList.remove('hidden'); nextButton.classList.add('hidden');
 }
+
+/**
+ * ★★★ 解答チェックとフィードバック表示のロジックを更新 ★★★
+ */
 function checkAnswer() {
     const q = quizQuestions[currentQuestionIndex];
     let isCorrect = false;
-    const readableAnswer = q.answer.replace(/;/g, ', ').replace(/,/g, ' または ');
-    
+
+    // 表示用の解答文字列を正しく生成
+    const readableAnswer = q.answer
+        .split(';')
+        .map(part => part.replace(/,/g, ' または '))
+        .join(', ');
+
+    // ユーザーの解答を取得
+    let userAnswers = [];
     if (q.type === 1) {
-        isCorrect = userAnswer.trim().toLowerCase() === q.answer.trim().toLowerCase();
+        userAnswers = [userAnswer];
     } else if (q.type === 2) {
-        userAnswer = choicesAreaEl.querySelector('input').value.trim().toLowerCase();
+        userAnswers = [choicesAreaEl.querySelector('input').value];
+    } else if (q.type === 3 || q.type === 4) {
+        userAnswers = Array.from(questionAreaEl.querySelectorAll('input.fill-in-blank'))
+            .map(input => input.value);
+    }
+    
+    // 正誤を判定
+    const cleanUserAnswers = userAnswers.map(ans => ans.trim().toLowerCase());
+    
+    if (q.type === 1 || q.type === 2) {
         const correctAnswers = q.answer.split(',').map(ans => ans.trim().toLowerCase());
-        isCorrect = correctAnswers.includes(userAnswer);
-    } else if (q.type === 3) {
-        const userAnswers = Array.from(questionAreaEl.querySelectorAll('input.fill-in-blank')).map(input => input.value.trim().toLowerCase());
+        isCorrect = correctAnswers.includes(cleanUserAnswers[0]);
+    } else if (q.type === 3) { // 順序が重要な穴埋め
         const correctAnswersByBlank = q.answer.split(';').map(ans => ans.trim().toLowerCase());
-        isCorrect = userAnswers.every((userAns, index) => {
+        isCorrect = cleanUserAnswers.every((userAns, index) => {
             if (correctAnswersByBlank[index] === undefined) return false;
-            const correctAlternatives = correctAnswersByBlank[index].split(',').map(alt => alt.trim().toLowerCase());
+            const correctAlternatives = correctAnswersByBlank[index].split(',').map(alt => alt.trim());
             return correctAlternatives.includes(userAns);
         });
+    } else if (q.type === 4) { // 順序を問わない穴埋め
+        const correctAnswersSet = q.answer.split(';').map(ans => ans.trim().toLowerCase());
+        // ユーザーの回答と正解をソートして比較することで、順序を問わずに一致を確認
+        isCorrect = cleanUserAnswers.length === correctAnswersSet.length &&
+                    [...cleanUserAnswers].sort().join('|') === [...correctAnswersSet].sort().join('|');
     }
 
+    // 正解・不正解のテキストフィードバックを表示
     if (isCorrect) {
         feedbackAreaEl.textContent = `正解！ 答えは「${readableAnswer}」です。`;
         feedbackAreaEl.className = 'correct';
@@ -250,6 +267,7 @@ function checkAnswer() {
         feedbackAreaEl.className = 'incorrect';
     }
     
+    // ボタンや入力欄に視覚的なフィードバックを適用
     if (q.type === 1) {
         const choiceButtons = choicesAreaEl.querySelectorAll('button');
         const selectedButton = choicesAreaEl.querySelector('button.selected');
@@ -259,18 +277,20 @@ function checkAnswer() {
         } else {
             if (selectedButton) selectedButton.classList.add('incorrect-choice');
             choiceButtons.forEach(button => {
-                if (button.textContent.trim().toLowerCase() === q.answer.trim().toLowerCase()) {
+                // 正解の選択肢（単一）を探す
+                const correctChoice = q.answer.split(',')[0].trim().toLowerCase();
+                if (button.textContent.trim().toLowerCase() === correctChoice) {
                     button.classList.add('correct-choice');
                 }
             });
         }
     } else if (q.type === 2) {
         choicesAreaEl.querySelector('input').disabled = true;
-    } else if (q.type === 3) {
+    } else if (q.type === 3 || q.type === 4) {
         questionAreaEl.querySelectorAll('input.fill-in-blank').forEach(input => input.disabled = true);
     }
     
-    submitButton.classList.add('hidden'); nextButton.classList.remove('hidden');
+    submitButton.classList.add('hidden'); nextButton.classList.add('hidden');
 }
 function showEndOfQuiz() {
     questionNumberEl.textContent = 'お疲れ様でした！';
