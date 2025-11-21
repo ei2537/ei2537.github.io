@@ -150,7 +150,6 @@ function parseMondaiText(text) {
             const parts = line.split('|'); if (parts.length < 4) return;
             const [type, question, choices, answer] = parts;
             if (!questionsBySubject[currentSubject]) { questionsBySubject[currentSubject] = []; }
-            // ★★★ 新しい問題形式をパースできるように type を追加 ★★★
             questionsBySubject[currentSubject].push({
                 type: parseInt(type, 10), question: question.trim(),
                 choices: choices ? choices.split(';').map(c => c.trim()) : [],
@@ -171,6 +170,8 @@ function displaySubjectSelection() {
     });
     selectAllSubjectsCheckbox.checked = true;
 }
+
+// ★★★ 修正点1: 関数の引数 (q) を削除しました ★★★
 function displayQuestion() {
     feedbackAreaEl.innerHTML = ''; feedbackAreaEl.className = ''; choicesAreaEl.innerHTML = ''; userAnswer = '';
     questionAreaEl.innerHTML = '';
@@ -200,7 +201,7 @@ function displayQuestion() {
             }
             break;
         case 3:
-        case 4: // ★★★ タイプ4もタイプ3と同じ表示方法 ★★★
+        case 4:
             const parts = q.question.split('____');
             parts.forEach((part, index) => {
                 questionAreaEl.appendChild(document.createTextNode(part));
@@ -214,20 +215,15 @@ function displayQuestion() {
     submitButton.classList.remove('hidden'); nextButton.classList.add('hidden');
 }
 
-/**
- * ★★★ 解答チェックとフィードバック表示のロジックを更新 ★★★
- */
 function checkAnswer() {
     const q = quizQuestions[currentQuestionIndex];
     let isCorrect = false;
 
-    // 表示用の解答文字列を正しく生成
     const readableAnswer = q.answer
         .split(';')
         .map(part => part.replace(/,/g, ' または '))
         .join(', ');
 
-    // ユーザーの解答を取得
     let userAnswers = [];
     if (q.type === 1) {
         userAnswers = [userAnswer];
@@ -238,27 +234,25 @@ function checkAnswer() {
             .map(input => input.value);
     }
     
-    // 正誤を判定
     const cleanUserAnswers = userAnswers.map(ans => ans.trim().toLowerCase());
     
     if (q.type === 1 || q.type === 2) {
         const correctAnswers = q.answer.split(',').map(ans => ans.trim().toLowerCase());
         isCorrect = correctAnswers.includes(cleanUserAnswers[0]);
-    } else if (q.type === 3) { // 順序が重要な穴埋め
+    } else if (q.type === 3) {
         const correctAnswersByBlank = q.answer.split(';').map(ans => ans.trim().toLowerCase());
         isCorrect = cleanUserAnswers.every((userAns, index) => {
             if (correctAnswersByBlank[index] === undefined) return false;
-            const correctAlternatives = correctAnswersByBlank[index].split(',').map(alt => alt.trim());
+            // ★★★ 修正点2: .toLowerCase() を追加して、大文字・小文字を区別しないように修正しました ★★★
+            const correctAlternatives = correctAnswersByBlank[index].split(',').map(alt => alt.trim().toLowerCase());
             return correctAlternatives.includes(userAns);
         });
-    } else if (q.type === 4) { // 順序を問わない穴埋め
+    } else if (q.type === 4) {
         const correctAnswersSet = q.answer.split(';').map(ans => ans.trim().toLowerCase());
-        // ユーザーの回答と正解をソートして比較することで、順序を問わずに一致を確認
         isCorrect = cleanUserAnswers.length === correctAnswersSet.length &&
                     [...cleanUserAnswers].sort().join('|') === [...correctAnswersSet].sort().join('|');
     }
 
-    // 正解・不正解のテキストフィードバックを表示
     if (isCorrect) {
         feedbackAreaEl.textContent = `正解！ 答えは「${readableAnswer}」です。`;
         feedbackAreaEl.className = 'correct';
@@ -267,7 +261,6 @@ function checkAnswer() {
         feedbackAreaEl.className = 'incorrect';
     }
     
-    // ボタンや入力欄に視覚的なフィードバックを適用
     if (q.type === 1) {
         const choiceButtons = choicesAreaEl.querySelectorAll('button');
         const selectedButton = choicesAreaEl.querySelector('button.selected');
@@ -277,7 +270,6 @@ function checkAnswer() {
         } else {
             if (selectedButton) selectedButton.classList.add('incorrect-choice');
             choiceButtons.forEach(button => {
-                // 正解の選択肢（単一）を探す
                 const correctChoice = q.answer.split(',')[0].trim().toLowerCase();
                 if (button.textContent.trim().toLowerCase() === correctChoice) {
                     button.classList.add('correct-choice');
@@ -290,8 +282,10 @@ function checkAnswer() {
         questionAreaEl.querySelectorAll('input.fill-in-blank').forEach(input => input.disabled = true);
     }
     
-    submitButton.classList.add('hidden'); nextButton.classList.add('hidden');
+    submitButton.classList.add('hidden');
+    nextButton.classList.remove('hidden');
 }
+
 function showEndOfQuiz() {
     questionNumberEl.textContent = 'お疲れ様でした！';
     questionAreaEl.innerHTML = '<p>全ての問題が終了しました。</p>';
@@ -300,12 +294,14 @@ function showEndOfQuiz() {
     nextButton.textContent = '最初に戻る';
     nextButton.onclick = () => window.location.reload();
 }
+
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [array[i], array[j]] = [array[j], array[i]];
     }
 }
+
 function showScreen(screenId) {
     startContainer.classList.add('hidden');
     subjectSelectionContainer.classList.add('hidden');
