@@ -35,22 +35,23 @@ const backToTopButton = document.getElementById('back-to-top-button');
 // --- グローバル変数 ---
 let loadedFiles = {};
 let allQuestionsBySubject = {};
+let currentWeaknessBySubject = {}; // ★追加: ニガテモード用の教科別データ
 let quizQuestions = [];
 let currentQuestionIndex = 0;
 let userAnswer = '';
 let correctCount = 0;
-let wrongQuestionsInSession = []; // その回のクイズで間違えた問題
+let wrongQuestionsInSession = []; 
 let isWeaknessMode = false;
 
 const STORAGE_KEY_WEAKNESS = 'testDeGo_weaknesses';
 
 // --- 更新履歴 ---
 const updateHistory = [
+    { date: '2025/11/22', content: 'ニガテ克服モードでも教科選択ができるように強化しました。' },
     { date: '2025/11/22', content: '「ニガテ克服モード」と「結果発表（正答率・復習リスト）」を追加しました。' },
     { date: '2025/11/21', content: '順不同の複数穴埋め問題（タイプ4）に対応し、解答表示を修正しました。' },
     { date: '2025/11/20', content: '重複した問題を自動的に除外する機能を追加しました。' },
     { date: '2025/11/19', content: '記述・穴埋め問題で複数の正解を許容するようにしました。' },
-    { date: '2025/11/15', content: '基本的な問題システムを構築しました。' },
 ];
 
 // --- 初期化処理 ---
@@ -77,7 +78,6 @@ function getStoredWeaknesses() {
 
 function saveWeakness(questionObj) {
     let weaknesses = getStoredWeaknesses();
-    // 重複チェック (一意なキーで判定)
     const qKey = createQuestionKey(questionObj);
     const exists = weaknesses.some(w => createQuestionKey(w) === qKey);
     
@@ -100,6 +100,7 @@ function removeWeakness(questionObj) {
 }
 
 function createQuestionKey(q) {
+    // Subjectも含めてキーにするのが理想だが、過去データ互換のため現状維持
     const choicesKey = q.type === 1 ? [...q.choices].sort().join(';') : '';
     return `${q.type}|${q.question}|${choicesKey}|${q.answer}`;
 }
@@ -135,21 +136,35 @@ fileInput.addEventListener('change', (event) => {
     fileInput.value = '';
 });
 
+// 通常モード開始（教科選択へ）
 startButton.addEventListener('click', () => {
-    displaySubjectSelection();
+    isWeaknessMode = false;
+    // 通常の教科データを渡して表示
+    displaySubjectSelection(allQuestionsBySubject);
     showScreen('subject-selection');
 });
 
-// ニガテ克服モード開始
+// ニガテ克服モード開始（教科選択へ）
 weaknessButton.addEventListener('click', () => {
     const weaknesses = getStoredWeaknesses();
     if (weaknesses.length === 0) return;
     
     isWeaknessMode = true;
-    quizQuestions = [...weaknesses];
-    shuffleArray(quizQuestions);
-    
-    startQuizSequence();
+
+    // ニガテ問題を教科ごとに分類する
+    currentWeaknessBySubject = {};
+    weaknesses.forEach(q => {
+        // 保存データにsubjectが無い場合（古いデータ）は「未分類」とする
+        const subj = q.subject || '未分類';
+        if (!currentWeaknessBySubject[subj]) {
+            currentWeaknessBySubject[subj] = [];
+        }
+        currentWeaknessBySubject[subj].push(q);
+    });
+
+    // ニガテ問題用の教科データを渡して表示
+    displaySubjectSelection(currentWeaknessBySubject);
+    showScreen('subject-selection');
 });
 
 selectAllSubjectsCheckbox.addEventListener('change', (event) => {
@@ -157,15 +172,22 @@ selectAllSubjectsCheckbox.addEventListener('change', (event) => {
     checkboxes.forEach(checkbox => checkbox.checked = event.target.checked);
 });
 
+// クイズ開始ボタン（通常・ニガテ共通）
 startQuizButton.addEventListener('click', () => {
     const selectedSubjects = Array.from(document.querySelectorAll('#subject-list input[type="checkbox"]:checked')).map(cb => cb.value);
     if (selectedSubjects.length === 0) { alert('教科を選択してください。'); return; }
     
-    isWeaknessMode = false;
-    quizQuestions = [];
-    selectedSubjects.forEach(subject => { quizQuestions.push(...allQuestionsBySubject[subject]); });
-    shuffleArray(quizQuestions);
+    // モードに応じて参照するデータソースを変える
+    const dataSource = isWeaknessMode ? currentWeaknessBySubject : allQuestionsBySubject;
     
+    quizQuestions = [];
+    selectedSubjects.forEach(subject => {
+        if (dataSource[subject]) {
+            quizQuestions.push(...dataSource[subject]);
+        }
+    });
+    
+    shuffleArray(quizQuestions);
     startQuizSequence();
 });
 
@@ -179,9 +201,7 @@ nextButton.addEventListener('click', () => {
     if (currentQuestionIndex < quizQuestions.length) { displayQuestion(); } else { showResultScreen(); }
 });
 
-// 結果画面のボタン
 retryButton.addEventListener('click', () => {
-    // 同じ問題セットでリトライ
     shuffleArray(quizQuestions);
     startQuizSequence();
 });
@@ -196,9 +216,9 @@ function startQuizSequence() {
     correctCount = 0;
     wrongQuestionsInSession = [];
     
-    // モード表示切り替え
     if (isWeaknessMode) {
         modeIndicatorEl.classList.remove('hidden');
+        modeIndicatorEl.textContent = '🔥ニガテ克服中';
     } else {
         modeIndicatorEl.classList.add('hidden');
     }
@@ -252,6 +272,8 @@ function updateFileStatus() {
     }
 }
 function handleDeleteFile(filename) { delete loadedFiles[filename]; rebuildAndRefreshUI(); }
+
+// ★修正: パース時に「subject」プロパティを付与するように変更
 function parseMondaiText(text) {
     const questionsBySubject = {};
     const lines = text.trim().split(/\r?\n/);
@@ -265,7 +287,9 @@ function parseMondaiText(text) {
             const [type, question, choices, answer] = parts;
             if (!questionsBySubject[currentSubject]) { questionsBySubject[currentSubject] = []; }
             questionsBySubject[currentSubject].push({
-                type: parseInt(type, 10), question: question.trim(),
+                subject: currentSubject, // ★教科名を保持
+                type: parseInt(type, 10),
+                question: question.trim(),
                 choices: choices ? choices.split(';').map(c => c.trim()) : [],
                 answer: answer.trim()
             });
@@ -273,15 +297,31 @@ function parseMondaiText(text) {
     });
     return questionsBySubject;
 }
-function displaySubjectSelection() {
+
+// ★修正: 表示するデータソースを引数で受け取るように変更
+function displaySubjectSelection(questionsData) {
     subjectListEl.innerHTML = '';
-    const subjects = Object.keys(allQuestionsBySubject).sort();
+    
+    // キー（教科名）を取得してソート
+    const subjects = Object.keys(questionsData).sort();
+    
     subjects.forEach(subject => {
-        const itemCount = allQuestionsBySubject[subject].length;
+        const itemCount = questionsData[subject].length;
         const div = document.createElement('div'); div.className = 'subject-item';
         div.innerHTML = `<label><input type="checkbox" value="${subject}" checked> ${subject} (${itemCount}問)</label>`;
         subjectListEl.appendChild(div);
     });
+    
+    // タイトルの変更（視覚的にわかりやすく）
+    const titleEl = document.querySelector('#subject-selection-container h2');
+    if (isWeaknessMode) {
+        titleEl.textContent = '復習する教科を選択してください';
+        titleEl.style.color = '#d63384';
+    } else {
+        titleEl.textContent = '教科を選択してください';
+        titleEl.style.color = '#333';
+    }
+    
     selectAllSubjectsCheckbox.checked = true;
 }
 
@@ -361,13 +401,11 @@ function checkAnswer() {
                     [...cleanUserAnswers].sort().join('|') === [...correctAnswersSet].sort().join('|');
     }
 
-    // ★★★ 正誤による処理の分岐 ★★★
     if (isCorrect) {
         feedbackAreaEl.textContent = `正解！ 答えは「${readableAnswer}」です。`;
         feedbackAreaEl.className = 'correct';
         correctCount++;
         
-        // ニガテ克服モードなら、正解したのでリストから削除
         if (isWeaknessMode) {
             removeWeakness(q);
         }
@@ -375,14 +413,10 @@ function checkAnswer() {
         feedbackAreaEl.textContent = `不正解... 正しい答えは「${readableAnswer}」です。`;
         feedbackAreaEl.className = 'incorrect';
         
-        // 間違えた問題を記録 (今回のセッション用)
         wrongQuestionsInSession.push(q);
-        
-        // 苦手リストに保存 (永続化)
         saveWeakness(q);
     }
     
-    // UI制御
     if (q.type === 1) {
         const choiceButtons = choicesAreaEl.querySelectorAll('button');
         choiceButtons.forEach(btn => btn.disabled = true);
@@ -418,7 +452,6 @@ function showResultScreen() {
     totalCountEl.textContent = total;
     percentageValEl.textContent = percentage;
     
-    // 間違えた問題のリスト表示
     wrongAnswerListEl.innerHTML = '';
     if (wrongQuestionsInSession.length > 0) {
         reviewSectionEl.classList.remove('hidden');
