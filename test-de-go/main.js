@@ -2,20 +2,35 @@
 const startContainer = document.getElementById('start-container');
 const subjectSelectionContainer = document.getElementById('subject-selection-container');
 const quizContainer = document.getElementById('quiz-container');
+const resultContainer = document.getElementById('result-container');
+
 const fileInput = document.getElementById('file-input');
 const fileStatusEl = document.getElementById('file-status');
 const startButton = document.getElementById('start-button');
+const weaknessButton = document.getElementById('weakness-button');
 const fileListContainer = document.getElementById('file-list-container');
 const fileListEl = document.getElementById('file-list');
 const subjectListEl = document.getElementById('subject-list');
 const selectAllSubjectsCheckbox = document.getElementById('select-all-subjects');
 const startQuizButton = document.getElementById('start-quiz-button');
+const backToStartButton = document.getElementById('back-to-start-button');
+
 const questionNumberEl = document.getElementById('question-number');
+const modeIndicatorEl = document.getElementById('mode-indicator');
 const questionAreaEl = document.getElementById('question-area');
 const choicesAreaEl = document.getElementById('choices-area');
 const feedbackAreaEl = document.getElementById('feedback-area');
 const submitButton = document.getElementById('submit-button');
 const nextButton = document.getElementById('next-button');
+
+// 結果画面用
+const scoreCountEl = document.getElementById('score-count');
+const totalCountEl = document.getElementById('total-count');
+const percentageValEl = document.getElementById('percentage-val');
+const reviewSectionEl = document.getElementById('review-section');
+const wrongAnswerListEl = document.getElementById('wrong-answer-list');
+const retryButton = document.getElementById('retry-button');
+const backToTopButton = document.getElementById('back-to-top-button');
 
 // --- グローバル変数 ---
 let loadedFiles = {};
@@ -23,21 +38,25 @@ let allQuestionsBySubject = {};
 let quizQuestions = [];
 let currentQuestionIndex = 0;
 let userAnswer = '';
+let correctCount = 0;
+let wrongQuestionsInSession = []; // その回のクイズで間違えた問題
+let isWeaknessMode = false;
 
-// --- 更新履歴データ ---
+const STORAGE_KEY_WEAKNESS = 'testDeGo_weaknesses';
+
+// --- 更新履歴 ---
 const updateHistory = [
+    { date: '2025/11/22', content: '「ニガテ克服モード」と「結果発表（正答率・復習リスト）」を追加しました。' },
     { date: '2025/11/21', content: '順不同の複数穴埋め問題（タイプ4）に対応し、解答表示を修正しました。' },
     { date: '2025/11/20', content: '重複した問題を自動的に除外する機能を追加しました。' },
-    { date: '2025/11/19', content: '記述・穴埋め問題で複数の正解を許容するようにしました。ダウンロード機能と更新履歴表示を追加しました。' },
-    { date: '2025/11/18', content: '選択問題の解答表示を改善し、複数箇所の穴埋め問題に対応しました。' },
-    { date: '2025/11/17', content: '選択肢のシャッフル機能を追加しました。' },
-    { date: '2025/11/16', content: 'ファイル読み込み、教科選択、問題シャッフル機能などを追加しました。' },
+    { date: '2025/11/19', content: '記述・穴埋め問題で複数の正解を許容するようにしました。' },
     { date: '2025/11/15', content: '基本的な問題システムを構築しました。' },
 ];
 
 // --- 初期化処理 ---
 document.addEventListener('DOMContentLoaded', () => {
     renderUpdateHistory();
+    updateWeaknessButtonState();
 });
 
 function renderUpdateHistory() {
@@ -49,6 +68,52 @@ function renderUpdateHistory() {
         historyListEl.appendChild(li);
     });
 }
+
+// --- 苦手問題管理 (LocalStorage) ---
+function getStoredWeaknesses() {
+    const stored = localStorage.getItem(STORAGE_KEY_WEAKNESS);
+    return stored ? JSON.parse(stored) : [];
+}
+
+function saveWeakness(questionObj) {
+    let weaknesses = getStoredWeaknesses();
+    // 重複チェック (一意なキーで判定)
+    const qKey = createQuestionKey(questionObj);
+    const exists = weaknesses.some(w => createQuestionKey(w) === qKey);
+    
+    if (!exists) {
+        weaknesses.push(questionObj);
+        localStorage.setItem(STORAGE_KEY_WEAKNESS, JSON.stringify(weaknesses));
+        updateWeaknessButtonState();
+    }
+}
+
+function removeWeakness(questionObj) {
+    let weaknesses = getStoredWeaknesses();
+    const qKey = createQuestionKey(questionObj);
+    const filtered = weaknesses.filter(w => createQuestionKey(w) !== qKey);
+    
+    if (weaknesses.length !== filtered.length) {
+        localStorage.setItem(STORAGE_KEY_WEAKNESS, JSON.stringify(filtered));
+        updateWeaknessButtonState();
+    }
+}
+
+function createQuestionKey(q) {
+    const choicesKey = q.type === 1 ? [...q.choices].sort().join(';') : '';
+    return `${q.type}|${q.question}|${choicesKey}|${q.answer}`;
+}
+
+function updateWeaknessButtonState() {
+    const weaknesses = getStoredWeaknesses();
+    weaknessButton.textContent = `ニガテ克服モード (${weaknesses.length}問)`;
+    if (weaknesses.length > 0) {
+        weaknessButton.disabled = false;
+    } else {
+        weaknessButton.disabled = true;
+    }
+}
+
 
 // --- イベントリスナー ---
 fileInput.addEventListener('change', (event) => {
@@ -66,29 +131,81 @@ fileInput.addEventListener('change', (event) => {
     });
     Promise.all(filePromises).then(() => {
         rebuildAndRefreshUI();
-    }).catch(error => { console.error("ファイルの読み込みに失敗しました:", error); fileStatusEl.textContent = "ファイルの読み込みに失敗しました。"; });
+    }).catch(error => { console.error("エラー:", error); fileStatusEl.textContent = "読み込み失敗"; });
     fileInput.value = '';
 });
-startButton.addEventListener('click', () => { displaySubjectSelection(); showScreen('subject-selection'); });
+
+startButton.addEventListener('click', () => {
+    displaySubjectSelection();
+    showScreen('subject-selection');
+});
+
+// ニガテ克服モード開始
+weaknessButton.addEventListener('click', () => {
+    const weaknesses = getStoredWeaknesses();
+    if (weaknesses.length === 0) return;
+    
+    isWeaknessMode = true;
+    quizQuestions = [...weaknesses];
+    shuffleArray(quizQuestions);
+    
+    startQuizSequence();
+});
+
 selectAllSubjectsCheckbox.addEventListener('change', (event) => {
     const checkboxes = document.querySelectorAll('#subject-list input[type="checkbox"]');
     checkboxes.forEach(checkbox => checkbox.checked = event.target.checked);
 });
+
 startQuizButton.addEventListener('click', () => {
     const selectedSubjects = Array.from(document.querySelectorAll('#subject-list input[type="checkbox"]:checked')).map(cb => cb.value);
-    if (selectedSubjects.length === 0) { alert('少なくとも1つの教科を選択してください。'); return; }
+    if (selectedSubjects.length === 0) { alert('教科を選択してください。'); return; }
+    
+    isWeaknessMode = false;
     quizQuestions = [];
     selectedSubjects.forEach(subject => { quizQuestions.push(...allQuestionsBySubject[subject]); });
     shuffleArray(quizQuestions);
-    currentQuestionIndex = 0;
-    showScreen('quiz');
-    displayQuestion();
+    
+    startQuizSequence();
 });
+
+backToStartButton.addEventListener('click', () => {
+    showScreen('start');
+});
+
 submitButton.addEventListener('click', checkAnswer);
 nextButton.addEventListener('click', () => {
     currentQuestionIndex++;
-    if (currentQuestionIndex < quizQuestions.length) { displayQuestion(); } else { showEndOfQuiz(); }
+    if (currentQuestionIndex < quizQuestions.length) { displayQuestion(); } else { showResultScreen(); }
 });
+
+// 結果画面のボタン
+retryButton.addEventListener('click', () => {
+    // 同じ問題セットでリトライ
+    shuffleArray(quizQuestions);
+    startQuizSequence();
+});
+backToTopButton.addEventListener('click', () => {
+    window.location.reload();
+});
+
+
+// --- クイズ進行管理 ---
+function startQuizSequence() {
+    currentQuestionIndex = 0;
+    correctCount = 0;
+    wrongQuestionsInSession = [];
+    
+    // モード表示切り替え
+    if (isWeaknessMode) {
+        modeIndicatorEl.classList.remove('hidden');
+    } else {
+        modeIndicatorEl.classList.add('hidden');
+    }
+
+    showScreen('quiz');
+    displayQuestion();
+}
 
 // --- 関数 ---
 function rebuildAndRefreshUI() { rebuildAllQuestions(); updateFileListUI(); updateFileStatus(); }
@@ -99,14 +216,11 @@ function rebuildAllQuestions() {
     for (const filename in loadedFiles) {
         const subjectsInFile = loadedFiles[filename];
         for (const subject in subjectsInFile) {
-            if (!allQuestionsBySubject[subject]) {
-                allQuestionsBySubject[subject] = [];
-            }
+            if (!allQuestionsBySubject[subject]) { allQuestionsBySubject[subject] = []; }
             subjectsInFile[subject].forEach(q => {
-                const choicesKey = q.type === 1 ? [...q.choices].sort().join(';') : '';
-                const questionKey = `${q.type}|${q.question}|${choicesKey}|${q.answer}`;
-                if (!uniqueQuestionKeys.has(questionKey)) {
-                    uniqueQuestionKeys.add(questionKey);
+                const qKey = createQuestionKey(q);
+                if (!uniqueQuestionKeys.has(qKey)) {
+                    uniqueQuestionKeys.add(qKey);
                     allQuestionsBySubject[subject].push(q);
                 }
             });
@@ -120,7 +234,7 @@ function updateFileListUI() {
         fileListContainer.classList.remove('hidden');
         filenames.forEach(filename => {
             const li = document.createElement('li');
-            li.innerHTML = `<span>${filename}</span><button class="delete-file-btn" title="このファイルを削除">&times;</button>`;
+            li.innerHTML = `<span>${filename}</span><button class="delete-file-btn" title="削除">&times;</button>`;
             li.querySelector('.delete-file-btn').onclick = () => handleDeleteFile(filename);
             fileListEl.appendChild(li);
         });
@@ -130,7 +244,7 @@ function updateFileStatus() {
     const totalSubjects = Object.keys(allQuestionsBySubject).length;
     const totalQuestions = Object.values(allQuestionsBySubject).flat().length;
     if (totalQuestions > 0) {
-        fileStatusEl.textContent = `${Object.keys(loadedFiles).length}個のファイルから ${totalSubjects}教科 / ${totalQuestions}問 を読み込みました。`;
+        fileStatusEl.textContent = `${Object.keys(loadedFiles).length}ファイル / ${totalSubjects}教科 / ${totalQuestions}問 読み込み完了`;
         startButton.disabled = false;
     } else {
         fileStatusEl.textContent = '問題ファイルが読み込まれていません。';
@@ -171,7 +285,6 @@ function displaySubjectSelection() {
     selectAllSubjectsCheckbox.checked = true;
 }
 
-// ★★★ 修正点1: 関数の引数 (q) を削除しました ★★★
 function displayQuestion() {
     feedbackAreaEl.innerHTML = ''; feedbackAreaEl.className = ''; choicesAreaEl.innerHTML = ''; userAnswer = '';
     questionAreaEl.innerHTML = '';
@@ -219,19 +332,15 @@ function checkAnswer() {
     const q = quizQuestions[currentQuestionIndex];
     let isCorrect = false;
 
-    const readableAnswer = q.answer
-        .split(';')
-        .map(part => part.replace(/,/g, ' または '))
-        .join(', ');
-
+    const readableAnswer = q.answer.split(';').map(part => part.replace(/,/g, ' または ')).join(', ');
     let userAnswers = [];
+
     if (q.type === 1) {
         userAnswers = [userAnswer];
     } else if (q.type === 2) {
         userAnswers = [choicesAreaEl.querySelector('input').value];
     } else if (q.type === 3 || q.type === 4) {
-        userAnswers = Array.from(questionAreaEl.querySelectorAll('input.fill-in-blank'))
-            .map(input => input.value);
+        userAnswers = Array.from(questionAreaEl.querySelectorAll('input.fill-in-blank')).map(input => input.value);
     }
     
     const cleanUserAnswers = userAnswers.map(ans => ans.trim().toLowerCase());
@@ -243,7 +352,6 @@ function checkAnswer() {
         const correctAnswersByBlank = q.answer.split(';').map(ans => ans.trim().toLowerCase());
         isCorrect = cleanUserAnswers.every((userAns, index) => {
             if (correctAnswersByBlank[index] === undefined) return false;
-            // ★★★ 修正点2: .toLowerCase() を追加して、大文字・小文字を区別しないように修正しました ★★★
             const correctAlternatives = correctAnswersByBlank[index].split(',').map(alt => alt.trim().toLowerCase());
             return correctAlternatives.includes(userAns);
         });
@@ -253,18 +361,32 @@ function checkAnswer() {
                     [...cleanUserAnswers].sort().join('|') === [...correctAnswersSet].sort().join('|');
     }
 
+    // ★★★ 正誤による処理の分岐 ★★★
     if (isCorrect) {
         feedbackAreaEl.textContent = `正解！ 答えは「${readableAnswer}」です。`;
         feedbackAreaEl.className = 'correct';
+        correctCount++;
+        
+        // ニガテ克服モードなら、正解したのでリストから削除
+        if (isWeaknessMode) {
+            removeWeakness(q);
+        }
     } else {
         feedbackAreaEl.textContent = `不正解... 正しい答えは「${readableAnswer}」です。`;
         feedbackAreaEl.className = 'incorrect';
+        
+        // 間違えた問題を記録 (今回のセッション用)
+        wrongQuestionsInSession.push(q);
+        
+        // 苦手リストに保存 (永続化)
+        saveWeakness(q);
     }
     
+    // UI制御
     if (q.type === 1) {
         const choiceButtons = choicesAreaEl.querySelectorAll('button');
-        const selectedButton = choicesAreaEl.querySelector('button.selected');
         choiceButtons.forEach(btn => btn.disabled = true);
+        const selectedButton = choicesAreaEl.querySelector('button.selected');
         if (isCorrect) {
             if (selectedButton) selectedButton.classList.add('correct-choice');
         } else {
@@ -286,13 +408,32 @@ function checkAnswer() {
     nextButton.classList.remove('hidden');
 }
 
-function showEndOfQuiz() {
-    questionNumberEl.textContent = 'お疲れ様でした！';
-    questionAreaEl.innerHTML = '<p>全ての問題が終了しました。</p>';
-    choicesAreaEl.innerHTML = ''; feedbackAreaEl.innerHTML = ''; feedbackAreaEl.className = '';
-    submitButton.classList.add('hidden');
-    nextButton.textContent = '最初に戻る';
-    nextButton.onclick = () => window.location.reload();
+function showResultScreen() {
+    showScreen('result');
+    
+    const total = quizQuestions.length;
+    const percentage = total > 0 ? Math.round((correctCount / total) * 100) : 0;
+    
+    scoreCountEl.textContent = correctCount;
+    totalCountEl.textContent = total;
+    percentageValEl.textContent = percentage;
+    
+    // 間違えた問題のリスト表示
+    wrongAnswerListEl.innerHTML = '';
+    if (wrongQuestionsInSession.length > 0) {
+        reviewSectionEl.classList.remove('hidden');
+        wrongQuestionsInSession.forEach(q => {
+            const li = document.createElement('li');
+            const readableAns = q.answer.split(';').map(p => p.replace(/,/g, ' or ')).join(', ');
+            li.innerHTML = `
+                <span class="wrong-q-text">Q. ${q.question.replace(/____/g, ' [　] ')}</span>
+                <span class="wrong-q-ans">A. ${readableAns}</span>
+            `;
+            wrongAnswerListEl.appendChild(li);
+        });
+    } else {
+        reviewSectionEl.classList.add('hidden');
+    }
 }
 
 function shuffleArray(array) {
@@ -306,5 +447,7 @@ function showScreen(screenId) {
     startContainer.classList.add('hidden');
     subjectSelectionContainer.classList.add('hidden');
     quizContainer.classList.add('hidden');
+    resultContainer.classList.add('hidden');
+    
     document.getElementById(`${screenId}-container`).classList.remove('hidden');
 }
