@@ -13,7 +13,8 @@ body {
     border-radius: 10px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     width: 90%;
-    max-width: 800px;
+    /* ★修正: 全体の幅を広げました (800px -> 1000px) */
+    max-width: 1000px;
     padding: 30px;
     box-sizing: border-box;
 }
@@ -38,9 +39,19 @@ body {
 .start-main-content {
     display: flex; gap: 30px; margin-top: 20px;
 }
+
 .start-left-panel {
-    flex: 2; display: flex; flex-direction: column;
+    /* ★修正: 左側の比率を大きくしました (2 -> 3) */
+    flex: 3;
+    display: flex; flex-direction: column;
 }
+
+.start-right-panel {
+    /* ★修正: 右側の比率を小さくしました (1.5 -> 1.2) */
+    flex: 1.2;
+    border-left: 1px solid #dee2e6; padding-left: 30px; text-align: left;
+}
+
 .main-title-area {
     text-align: center; flex-shrink: 0;
 }
@@ -55,15 +66,17 @@ body {
     justify-content: center;
     gap: 15px;
     margin-bottom: 20px;
+    flex-wrap: wrap; /* 画面が狭すぎる場合は折り返しを許可 */
 }
 #start-button, #weakness-button {
-    padding: 15px 30px;
+    padding: 15px 25px; /* ★微調整: 横パディングを少し減らしました */
     font-size: 1.1em;
     border: none;
     border-radius: 5px;
     cursor: pointer;
     transition: background-color 0.2s;
     color: white;
+    white-space: nowrap; /* ★追加: ボタン内の文字が勝手に改行されないように */
 }
 #start-button { background-color: #007bff; }
 #start-button:disabled { background-color: #cccccc; cursor: not-allowed; }
@@ -84,9 +97,6 @@ body {
 .secondary-btn:hover { background-color: #5a6268; }
 
 /* --- 右パネル & 情報セクション --- */
-.start-right-panel {
-    flex: 1.5; border-left: 1px solid #dee2e6; padding-left: 30px; text-align: left;
-}
 #file-list-container h2, #download-section h2, #history-section h2 {
     margin-top: 0; font-size: 1.2em; color: #333;
 }
