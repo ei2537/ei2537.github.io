@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公平な席替えシステム</title>
+    <style>
+        body {
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+
+        /* コントロール部分 */
+        .controls {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.1s, background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        /* 教室のレイアウト */
+        .classroom-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            max-width: 1000px;
+            width: 100%;
+        }
+
+        .blackboard {
+            background-color: #27ae60;
+            color: white;
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+            font-weight: bold;
+            letter-spacing: 5px;
+            border: 4px solid #1e8449;
+        }
+
+        /* 座席グリッド (縦7 x 横6) */
+        .seat-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr); /* 横6列 */
+            gap: 15px;
+        }
+
+        /* 個別の座席 */
+        .seat {
+            background-color: #ecf0f1;
+            border: 2px solid #bdc3c7;
+            border-radius: 8px;
+            padding: 10px 5px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 60px;
+            transition: all 0.3s ease;
+            opacity: 0; /* アニメーション用 */
+        }
+
+        .seat.filled {
+            animation: fadeIn 0.5s forwards;
+        }
+
+        .seat-number {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            margin-bottom: 4px;
+        }
+
+        .seat-name {
+            font-weight: bold;
+            font-size: 0.95rem;
+            line-height: 1.2;
+        }
+
+        /* レスポンシブ対応（スマホなどはスクロールまたは縮小） */
+        @media (max-width: 800px) {
+            .seat-grid {
+                grid-template-columns: repeat(6, 1fr);
+                gap: 5px;
+            }
+            .seat {
+                padding: 5px;
+                min-height: 50px;
+            }
+            .seat-name {
+                font-size: 0.7rem;
+            }
+            .classroom-container {
+                padding: 10px;
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>席替え抽選システム</h1>
+
+    <div class="controls">
+        <button onclick="shuffleSeats()">席替えスタート！</button>
+    </div>
+
+    <div class="classroom-container">
+        <div class="blackboard">黒板 / 教卓</div>
+        <div class="seat-grid" id="seatGrid">
+            <!-- ここにJavaScriptで座席が生成されます -->
+        </div>
+    </div>
+
+    <script>
+        // 生徒データ
+        const students = [
+            { id: 1, name: "安立 壮汰" },
+            { id: 2, name: "渥美 陽奏" },
+            { id: 3, name: "荒木 優吾" },
+            { id: 4, name: "安東 颯太" },
+            { id: 5, name: "石原 陽元" },
+            { id: 6, name: "氏原 彩帆" },
+            { id: 7, name: "大島 芽依奈" },
+            { id: 8, name: "大城 葵" },
+            { id: 9, name: "大城 空也" },
+            { id: 10, name: "大塚 千聖" },
+            { id: 11, name: "大野 壮史" },
+            { id: 12, name: "大庭 美依奈" },
+            { id: 13, name: "片橋 十輝" },
+            { id: 14, name: "片山 亮太" },
+            { id: 15, name: "叶木 裕翔" },
+            { id: 16, name: "賀茂 直来" },
+            { id: 17, name: "川村 大翔" },
+            { id: 18, name: "児玉 遼平" },
+            { id: 19, name: "後藤 琉" },
+            { id: 20, name: "小山 陽生" },
+            { id: 21, name: "柴田 琉生" },
+            { id: 22, name: "鈴木 海斗" },
+            { id: 23, name: "鈴木 翔大" },
+            { id: 24, name: "鈴木 健留" },
+            { id: 25, name: "高須 祐太" },
+            { id: 26, name: "高林 快" },
+            { id: 27, name: "立石 大記" },
+            { id: 28, name: "田中 杏奈" },
+            { id: 29, name: "長津 陸矢" },
+            { id: 30, name: "中村 桜志郎" },
+            { id: 31, name: "西野 榛希" },
+            { id: 32, name: "長谷 雄也" },
+            { id: 33, name: "長谷川 優" },
+            { id: 34, name: "平野 滉大" },
+            { id: 35, name: "牧野 照和" },
+            { id: 36, name: "松浦 陽太" },
+            { id: 37, name: "間渕 颯太" },
+            { id: 38, name: "森 結平" },
+            { id: 39, name: "森下 侑哉" },
+            { id: 40, name: "山口 晋平" },
+            { id: 41, name: "ロスコ エンジル" },
+            { id: 42, name: "渡邊 順也" }
+        ];
+
+        // フィッシャー–イェーツのシャッフルアルゴリズム（公平なランダム）
+        function shuffleArray(array) {
+            const newArray = [...array]; // 元の配列を破壊しないようにコピー
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+        }
+
+        function shuffleSeats() {
+            const grid = document.getElementById('seatGrid');
+            grid.innerHTML = ''; // 一旦クリア
+
+            // シャッフル実行
+            const shuffledStudents = shuffleArray(students);
+
+            // 表示処理
+            shuffledStudents.forEach((student, index) => {
+                const seatDiv = document.createElement('div');
+                seatDiv.className = 'seat';
+                
+                // アニメーションのために少しずつ遅延させる
+                seatDiv.style.animationDelay = `${index * 0.02}s`; 
+                seatDiv.classList.add('filled');
+
+                // HTMLの中身
+                seatDiv.innerHTML = `
+                    <div class="seat-number">No.${student.id}</div>
+                    <div class="seat-name">${student.name}</div>
+                `;
+
+                grid.appendChild(seatDiv);
+            });
+        }
+
+        // ページ読み込み時に一度空の座席を表示する場合（オプション）
+        // 現状はボタンを押すまで空っぽです。
+    </script>
+</body>
+</html>
