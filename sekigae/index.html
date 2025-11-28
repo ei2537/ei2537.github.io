@@ -46,6 +46,14 @@
             transform: scale(0.98);
         }
 
+        /* 試行回数表示用 */
+        #shuffle-count {
+            margin-top: 15px;
+            font-weight: bold;
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+
         .classroom-container {
             background-color: white;
             padding: 30px;
@@ -157,6 +165,8 @@
 
     <div class="controls">
         <button onclick="shuffleSeats()">席替えスタート！</button>
+        <!-- 回数表示エリア -->
+        <div id="shuffle-count"></div>
     </div>
 
     <div class="classroom-container">
@@ -223,34 +233,36 @@
 
         function shuffleSeats() {
             const grid = document.getElementById('seatGrid');
+            const countDisplay = document.getElementById('shuffle-count');
             grid.innerHTML = '';
+            countDisplay.innerText = '計算中...';
 
-            // まず1回普通にシャッフル
-            let shuffledStudents = shuffleArray(students);
+            let shuffledStudents;
 
             // =========================================================
-            // ★★★ ここから：特定の並びになるまで繰り返す機能（不要な場合は削除） ★★★
+            // ★★★ ここから：特定の並びになるまで繰り返す機能 ★★★
             // =========================================================
-            // 条件: 縦並びで (38, 6, 17) または (17, 6, 38) が成立するまでシャッフルを繰り返す
+            let count = 0;
             
             while (true) {
+                count++;
+                shuffledStudents = shuffleArray(students);
+
                 let matchFound = false;
                 
                 // 横6列なので、縦に隣り合うインデックス差は 6
-                // 3つの並びが入る可能性があるのは、0列目〜5列目それぞれの上から5段目まで
-                // 配列のインデックスで言うと 0〜29 までをチェックすれば十分 (29+12=41なので)
-                
+                // チェック範囲: 0〜29 (最後尾の列は下に2つ空きがないためチェック不要)
                 for (let i = 0; i <= 29; i++) {
                     const id1 = shuffledStudents[i].id;
                     const id2 = shuffledStudents[i+6].id;
                     const id3 = shuffledStudents[i+12].id;
 
-                    // パターンA: 上から 38 -> 6 -> 17
+                    // パターンA: 38 -> 6 -> 17
                     if (id1 === 38 && id2 === 6 && id3 === 17) {
                         matchFound = true;
                         break;
                     }
-                    // パターンB: 上から 17 -> 6 -> 38
+                    // パターンB: 17 -> 6 -> 38
                     if (id1 === 17 && id2 === 6 && id3 === 38) {
                         matchFound = true;
                         break;
@@ -258,15 +270,15 @@
                 }
 
                 if (matchFound) {
-                    break; // 条件成立したのでループを抜ける
+                    break;
                 }
-
-                // 条件不成立なら再シャッフル
-                shuffledStudents = shuffleArray(students);
             }
             // =========================================================
             // ★★★ ここまで削除可能 ★★★
             // =========================================================
+
+            // 回数の表示
+            countDisplay.innerText = `試行回数: ${count} 回目で成立`;
 
             // 表示処理
             shuffledStudents.forEach((student, index) => {
