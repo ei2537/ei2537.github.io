@@ -21,7 +21,6 @@
             color: #2c3e50;
         }
 
-        /* コントロール部分 */
         .controls {
             margin-bottom: 20px;
             text-align: center;
@@ -47,7 +46,6 @@
             transform: scale(0.98);
         }
 
-        /* 教室のレイアウト */
         .classroom-container {
             background-color: white;
             padding: 30px;
@@ -69,14 +67,13 @@
             border: 4px solid #1e8449;
         }
 
-        /* 座席グリッド (縦7 x 横6) */
         .seat-grid {
             display: grid;
             grid-template-columns: repeat(6, 1fr); /* 横6列 */
             gap: 15px;
         }
 
-        /* 個別の座席 */
+        /* 通常の座席 */
         .seat {
             background-color: #ecf0f1;
             border: 2px solid #bdc3c7;
@@ -89,7 +86,18 @@
             align-items: center;
             min-height: 60px;
             transition: all 0.3s ease;
-            opacity: 0; /* アニメーション用 */
+            opacity: 0;
+        }
+
+        /* ★★★ 追加：強調表示用のスタイル ★★★ */
+        .seat.highlight {
+            background-color: #fff3cd; /* 薄い黄色背景 */
+            border-color: #ffc107;     /* 金色の枠線 */
+            color: #856404;            /* 文字色を濃く */
+            box-shadow: 0 0 10px rgba(255, 193, 7, 0.4);
+            transform: scale(1.05);    /* 少し大きくする */
+            z-index: 10;               /* 他の席より手前に表示 */
+            font-weight: bold;
         }
 
         .seat.filled {
@@ -101,6 +109,11 @@
             color: #7f8c8d;
             margin-bottom: 4px;
         }
+        
+        /* 強調時の番号の色 */
+        .seat.highlight .seat-number {
+            color: #856404; 
+        }
 
         .seat-name {
             font-weight: bold;
@@ -108,7 +121,6 @@
             line-height: 1.2;
         }
 
-        /* レスポンシブ対応（スマホなどはスクロールまたは縮小） */
         @media (max-width: 800px) {
             .seat-grid {
                 grid-template-columns: repeat(6, 1fr);
@@ -130,6 +142,16 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        
+        /* 強調時のアニメーション上書き（拡大表示を維持するため） */
+        @keyframes fadeInHighlight {
+            from { opacity: 0; transform: translateY(10px) scale(1.05); }
+            to { opacity: 1; transform: translateY(0) scale(1.05); }
+        }
+        
+        .seat.highlight.filled {
+             animation: fadeInHighlight 0.5s forwards;
+        }
     </style>
 </head>
 <body>
@@ -143,12 +165,11 @@
     <div class="classroom-container">
         <div class="blackboard">黒板 / 教卓</div>
         <div class="seat-grid" id="seatGrid">
-            <!-- ここにJavaScriptで座席が生成されます -->
+            <!-- JavaScriptで生成 -->
         </div>
     </div>
 
     <script>
-        // 生徒データ
         const students = [
             { id: 1, name: "安立 壮汰" },
             { id: 2, name: "渥美 陽奏" },
@@ -194,9 +215,11 @@
             { id: 42, name: "渡邊 順也" }
         ];
 
-        // フィッシャー–イェーツのシャッフルアルゴリズム（公平なランダム）
+        // 強調表示するIDのリスト
+        const highlightIds = [6, 17, 38];
+
         function shuffleArray(array) {
-            const newArray = [...array]; // 元の配列を破壊しないようにコピー
+            const newArray = [...array];
             for (let i = newArray.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
@@ -206,21 +229,22 @@
 
         function shuffleSeats() {
             const grid = document.getElementById('seatGrid');
-            grid.innerHTML = ''; // 一旦クリア
+            grid.innerHTML = '';
 
-            // シャッフル実行
             const shuffledStudents = shuffleArray(students);
 
-            // 表示処理
             shuffledStudents.forEach((student, index) => {
                 const seatDiv = document.createElement('div');
                 seatDiv.className = 'seat';
                 
-                // アニメーションのために少しずつ遅延させる
+                // 特定のIDが含まれているかチェックしてクラスを追加
+                if (highlightIds.includes(student.id)) {
+                    seatDiv.classList.add('highlight');
+                }
+
                 seatDiv.style.animationDelay = `${index * 0.02}s`; 
                 seatDiv.classList.add('filled');
 
-                // HTMLの中身
                 seatDiv.innerHTML = `
                     <div class="seat-number">No.${student.id}</div>
                     <div class="seat-name">${student.name}</div>
@@ -229,9 +253,6 @@
                 grid.appendChild(seatDiv);
             });
         }
-
-        // ページ読み込み時に一度空の座席を表示する場合（オプション）
-        // 現状はボタンを押すまで空っぽです。
     </script>
 </body>
 </html>
