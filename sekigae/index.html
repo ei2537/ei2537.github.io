@@ -73,7 +73,6 @@
             gap: 15px;
         }
 
-        /* 通常の座席 */
         .seat {
             background-color: #ecf0f1;
             border: 2px solid #bdc3c7;
@@ -89,14 +88,14 @@
             opacity: 0;
         }
 
-        /* ★★★ 追加：強調表示用のスタイル ★★★ */
+        /* 強調表示用のスタイル */
         .seat.highlight {
-            background-color: #fff3cd; /* 薄い黄色背景 */
-            border-color: #ffc107;     /* 金色の枠線 */
-            color: #856404;            /* 文字色を濃く */
+            background-color: #fff3cd;
+            border-color: #ffc107;
+            color: #856404;
             box-shadow: 0 0 10px rgba(255, 193, 7, 0.4);
-            transform: scale(1.05);    /* 少し大きくする */
-            z-index: 10;               /* 他の席より手前に表示 */
+            transform: scale(1.05);
+            z-index: 10;
             font-weight: bold;
         }
 
@@ -110,7 +109,6 @@
             margin-bottom: 4px;
         }
         
-        /* 強調時の番号の色 */
         .seat.highlight .seat-number {
             color: #856404; 
         }
@@ -143,7 +141,6 @@
             to { opacity: 1; transform: translateY(0); }
         }
         
-        /* 強調時のアニメーション上書き（拡大表示を維持するため） */
         @keyframes fadeInHighlight {
             from { opacity: 0; transform: translateY(10px) scale(1.05); }
             to { opacity: 1; transform: translateY(0) scale(1.05); }
@@ -164,9 +161,7 @@
 
     <div class="classroom-container">
         <div class="blackboard">黒板 / 教卓</div>
-        <div class="seat-grid" id="seatGrid">
-            <!-- JavaScriptで生成 -->
-        </div>
+        <div class="seat-grid" id="seatGrid"></div>
     </div>
 
     <script>
@@ -215,7 +210,6 @@
             { id: 42, name: "渡邊 順也" }
         ];
 
-        // 強調表示するIDのリスト
         const highlightIds = [6, 17, 38];
 
         function shuffleArray(array) {
@@ -231,13 +225,54 @@
             const grid = document.getElementById('seatGrid');
             grid.innerHTML = '';
 
-            const shuffledStudents = shuffleArray(students);
+            // まず1回普通にシャッフル
+            let shuffledStudents = shuffleArray(students);
 
+            // =========================================================
+            // ★★★ ここから：特定の並びになるまで繰り返す機能（不要な場合は削除） ★★★
+            // =========================================================
+            // 条件: 縦並びで (38, 6, 17) または (17, 6, 38) が成立するまでシャッフルを繰り返す
+            
+            while (true) {
+                let matchFound = false;
+                
+                // 横6列なので、縦に隣り合うインデックス差は 6
+                // 3つの並びが入る可能性があるのは、0列目〜5列目それぞれの上から5段目まで
+                // 配列のインデックスで言うと 0〜29 までをチェックすれば十分 (29+12=41なので)
+                
+                for (let i = 0; i <= 29; i++) {
+                    const id1 = shuffledStudents[i].id;
+                    const id2 = shuffledStudents[i+6].id;
+                    const id3 = shuffledStudents[i+12].id;
+
+                    // パターンA: 上から 38 -> 6 -> 17
+                    if (id1 === 38 && id2 === 6 && id3 === 17) {
+                        matchFound = true;
+                        break;
+                    }
+                    // パターンB: 上から 17 -> 6 -> 38
+                    if (id1 === 17 && id2 === 6 && id3 === 38) {
+                        matchFound = true;
+                        break;
+                    }
+                }
+
+                if (matchFound) {
+                    break; // 条件成立したのでループを抜ける
+                }
+
+                // 条件不成立なら再シャッフル
+                shuffledStudents = shuffleArray(students);
+            }
+            // =========================================================
+            // ★★★ ここまで削除可能 ★★★
+            // =========================================================
+
+            // 表示処理
             shuffledStudents.forEach((student, index) => {
                 const seatDiv = document.createElement('div');
                 seatDiv.className = 'seat';
                 
-                // 特定のIDが含まれているかチェックしてクラスを追加
                 if (highlightIds.includes(student.id)) {
                     seatDiv.classList.add('highlight');
                 }
