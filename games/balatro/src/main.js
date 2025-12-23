@@ -55,9 +55,11 @@ function drawCards(count) {
         const card = new CardSprite(data.rank, data.suit);
         card.scale.set(2.5);
         
-        // カード選択時のイベントリスナー
+        // ★修正ポイント: クリック時の処理
         card.on('pointerdown', () => {
-            updateScorePreview();
+            card.toggleSelect(); // フラグ反転
+            updateScorePreview(); // スコア計算
+            layoutHand();         // ★位置更新（これで浮き上がります！）
         });
 
         handCards.push(card);
@@ -191,11 +193,17 @@ function layoutHand() {
 
     handCards.forEach((card, i) => {
         const offset = i - (handCards.length - 1) / 2;
-        card.x = offset * 90; 
-        card.y = Math.abs(offset) * 5; 
-        // 選択中は少し上に表示
-        if (card.selected) card.y -= 30;
         
+        // 基本位置
+        card.x = offset * 90; 
+        let targetY = Math.abs(offset) * 5; 
+        
+        // ★選択されているなら上にずらす (ここがモーションの肝)
+        if (card.selected) {
+            targetY -= 40; 
+        }
+        
+        card.y = targetY;
         card.rotation = offset * 0.05;
         card.zIndex = i;
     });

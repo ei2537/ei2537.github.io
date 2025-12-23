@@ -21,10 +21,13 @@ export class CardSprite extends PIXI.Container {
         // 3. インタラクション
         this.eventMode = 'static';
         this.cursor = 'pointer';
-        this.on('pointerdown', () => this.toggleSelect());
+        
+        // ★クリックイベントは main.js 側で管理するので、ここでは toggleSelect だけ定義しておく
+        // this.on('pointerdown', ...) は main.js で設定します
     }
 
     toggleSelect() {
         this.selected = !this.selected;
+        // ★重要: ここで this.y = ... とか書くと競合するので書かない！
     }
 }
