@@ -6,7 +6,9 @@ import { PokerLogic } from './logic/PokerLogic.js';
 import { initPCards, initPCenters } from './definitions.js';
 
 // --- 1. Init PixiJS ---
+// ドット絵をくっきり表示する設定
 PIXI.BaseTexture.defaultOptions.scaleMode = PIXI.SCALE_MODES.NEAREST;
+
 const app = new PIXI.Application({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -31,16 +33,15 @@ const pxToGu = (px) => px / (G.TILESIZE * G.TILESCALE);
 
 // --- 3. Resource Loading ---
 const loader = PIXI.Assets;
-let atlasTexture = null;
+
+// ここで textures 変数を宣言します
+let textures = {}; 
 
 async function setup() {
     // 複数の画像を読み込む
+    // ※パスが間違っている場合は適宜修正してください
     textures.cards = await loader.load('resources/textures/1x/8BitDeck.png');
-    textures.centers = await loader.load('resources/textures/1x/Enhancers.png'); // 裏面や強化カード用
-
-    // Load Texture Atlas
-    // ※パスは環境に合わせて確認してください (github pagesなら /games/balatro/resources/... かもしれません)
-    atlasTexture = await loader.load('resources/textures/1x/8BitDeck.png');
+    textures.centers = await loader.load('resources/textures/1x/Enhancers.png');
     
     // --- 4. Game Logic Initialization ---
     
@@ -60,7 +61,7 @@ async function setup() {
             G.CARD_W, G.CARD_H, 
             G.P_CARDS[key], 
             G.P_CENTERS['c_base'], 
-            textures
+            textures // ★ここで読み込んだ画像セットを渡す
         );
 
         // Add to Pixi Stage
@@ -122,7 +123,6 @@ async function setup() {
 // --- 5. Main Loop (Ticker) ---
 app.ticker.add((delta) => {
     // Convert PIXI delta (frames) to seconds
-    // delta is roughly 1.0 at 60FPS
     const dt = delta / 60; 
 
     // Update Timers
