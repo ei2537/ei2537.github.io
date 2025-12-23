@@ -4,41 +4,46 @@ export class AssetLoader {
     static textures = {};
 
     static async load() {
-        // 画像のロード（ドット絵設定）
         PIXI.BaseTexture.defaultOptions.scaleMode = PIXI.SCALE_MODES.NEAREST;
         
         const sheet = await PIXI.Assets.load('resources/textures/1x/8BitDeck.png');
         const centers = await PIXI.Assets.load('resources/textures/1x/Enhancers.png');
+        const jokers = await PIXI.Assets.load('resources/textures/1x/Jokers.png'); // 追加
 
-        // カードサイズ定義 (8BitDeck.png)
         const w = 71;
         const h = 95;
 
-        // スートとランクの並び順定義
+        // --- Cards ---
         const suits = ['Hearts', 'Clubs', 'Diamonds', 'Spades'];
         const ranks = ['2','3','4','5','6','7','8','9','10','Jack','Queen','King','Ace'];
 
-        // テクスチャを切り出してキャッシュする
         this.textures.cards = {};
-        
         suits.forEach((suit, row) => {
             ranks.forEach((rank, col) => {
                 const rect = new PIXI.Rectangle(col * w, row * h, w, h);
-                const tex = new PIXI.Texture(sheet.baseTexture, rect);
-                this.textures.cards[`${rank}_${suit}`] = tex;
+                this.textures.cards[`${rank}_${suit}`] = new PIXI.Texture(sheet.baseTexture, rect);
             });
         });
 
-        // 裏面 (Enhancers.png の特定位置: 赤デッキは 0,0 と仮定)
-        const backRect = new PIXI.Rectangle(0, 0, w, h);
-        this.textures.back = new PIXI.Texture(centers.baseTexture, backRect);
-        
-        // 台紙 (Enhancers.png の白いカード: 1,0 と仮定)
-        const baseRect = new PIXI.Rectangle(w, 0, w, h);
-        this.textures.base = new PIXI.Texture(centers.baseTexture, baseRect);
+        // --- Centers & Back ---
+        this.textures.back = new PIXI.Texture(centers.baseTexture, new PIXI.Rectangle(0, 0, w, h));
+        this.textures.base = new PIXI.Texture(centers.baseTexture, new PIXI.Rectangle(w, 0, w, h));
+
+        // --- Jokers ---
+        // Jokers.png もグリッド状 (例: 10x16)
+        this.textures.jokers = {};
+        // 簡易的に全エリアをキャッシュせず、getJokerTextureで動的に切り出す形にします
+        this.jokerBaseTexture = jokers.baseTexture;
     }
 
     static getCardTexture(rank, suit) {
         return this.textures.cards[`${rank}_${suit}`];
+    }
+
+    static getJokerTexture(pos) {
+        const w = 71;
+        const h = 95;
+        const rect = new PIXI.Rectangle(pos.x * w, pos.y * h, w, h);
+        return new PIXI.Texture(this.jokerBaseTexture, rect);
     }
 }
