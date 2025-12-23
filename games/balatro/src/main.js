@@ -18,7 +18,6 @@ window.addEventListener('resize', () => {
     layoutUI();
 });
 
-// レイヤー
 const gameContainer = new PIXI.Container();
 const uiContainer = new PIXI.Container();
 app.stage.addChild(gameContainer);
@@ -28,39 +27,44 @@ app.stage.addChild(uiContainer);
 const STATE = {
     deck: [],
     handCards: [],
-    score: 0,           // 現在のラウンドスコア
-    targetScore: 300,   // 目標スコア (Small Blind)
-    hands: 4,           // 残りハンド数
-    discards: 3,        // 残りディスカード数
-    ante: 1,            // 現在のアンティ
-    dollars: 4,         // 所持金
-    round: 1            // ラウンド数
+    score: 0,
+    targetScore: 300,
+    hands: 4,
+    discards: 3,
+    ante: 1,
+    dollars: 4,
+    round: 1,
+    isRoundOver: false // ラウンド終了フラグを追加
 };
 
-// --- UI要素 ---
 let infoText, scoreText, btnPlay, btnDiscard;
-let hudTexts = {}; // HUDのテキスト群
+let hudTexts = {};
 
 async function init() {
     await AssetLoader.load();
-    createHUD(); // 左側のステータス表示を作成
-    createGameUI(); // ボタンなど
+    createHUD();
+    createGameUI();
     startRound();
 }
 
-// --- ゲーム進行ロジック ---
+// --- ゲーム進行 ---
 
 function startRound() {
+    STATE.isRoundOver = false; // フラグ解除
     STATE.score = 0;
     STATE.hands = 4;
     STATE.discards = 3;
     STATE.handCards = [];
-    // 簡易的な目標スコア上昇ロジック
-    STATE.targetScore = 300 * STATE.ante * STATE.round; 
-    
+    STATE.targetScore = 300 * Math.pow(1.5, STATE.ante - 1) * STATE.round; // 少し難易度カーブを調整
+    STATE.targetScore = Math.floor(STATE.targetScore / 100) * 100; // キリ良く
+
     updateHUD();
     resetDeck();
     drawCards(8);
+    
+    infoText.text = "Select cards";
+    infoText.style.fill = 0xFFFFFF;
+    scoreText.text = "";
 }
 
 function resetDeck() {
@@ -72,6 +76,8 @@ function resetDeck() {
 }
 
 function drawCards(count) {
+    if (STATE.isRoundOver) return; // ラウンド終了していたら引かない
+
     for(let i=0; i<count; i++) {
         if (STATE.deck.length === 0) break;
         const data = STATE.deck.pop();
@@ -79,6 +85,7 @@ function drawCards(count) {
         card.scale.set(2.5);
         
         card.on('pointerdown', () => {
+            if (STATE.isRoundOver) return;
             card.toggleSelect();
             updateScorePreview();
             layoutHand();
@@ -92,13 +99,14 @@ function drawCards(count) {
 }
 
 function updateScorePreview() {
+    if (STATE.isRoundOver) return;
+
     const selected = STATE.handCards.filter(c => c.selected);
     if (selected.length > 0) {
         const result = Poker.evaluate(selected);
         infoText.text = result.name;
-        scoreText.text = result.text; // "30 x 4 = 120"
+        scoreText.text = result.text;
         
-        // ボタン制御
         const canPlay = selected.length <= 5 && STATE.hands > 0;
         const canDiscard = selected.length <= 5 && STATE.discards > 0;
         
@@ -107,7 +115,6 @@ function updateScorePreview() {
         
         btnDiscard.alpha = canDiscard ? 1.0 : 0.5;
         btnDiscard.eventMode = canDiscard ? 'static' : 'none';
-
     } else {
         infoText.text = "Select cards";
         scoreText.text = "";
@@ -116,43 +123,57 @@ function updateScorePreview() {
     }
 }
 
-// プレイ実行
+// ★修正ポイント: ロジックフローを整理
 function onPlay() {
     const selected = STATE.handCards.filter(c => c.selected);
     if (selected.length === 0 || STATE.hands <= 0) return;
 
-    // スコア計算
     const result = Poker.evaluate(selected);
     const earnedScore = result.score;
     
-    // スコア加算アニメーション（簡易）
     STATE.score += earnedScore;
     STATE.hands--;
     updateHUD();
 
+    // カードを捨てる
+    removeSelectedCards();
+
     // 勝利判定
     if (STATE.score >= STATE.targetScore) {
+        // --- 勝利 ---
+        STATE.isRoundOver = true; // 操作ロック
         infoText.text = "BLIND DEFEATED!";
         infoText.style.fill = 0xF1C40F; // Gold
+        scoreText.text = "";
+        
+        // ボタン無効化
+        btnPlay.alpha = 0; btnDiscard.alpha = 0;
+
+        // 2秒後に次のラウンドへ
         setTimeout(() => {
             nextRound();
         }, 2000);
+
     } else if (STATE.hands === 0) {
+        // --- 敗北 ---
+        STATE.isRoundOver = true;
         infoText.text = "GAME OVER";
         infoText.style.fill = 0xE74C3C; // Red
-        // 本来はここでリスタート処理など
-    } else {
-        infoText.text = `Scored: ${earnedScore}`;
-    }
+        scoreText.text = `Final Score: ${STATE.score}`;
+        
+        btnPlay.alpha = 0; btnDiscard.alpha = 0;
 
-    // カード処理
-    removeSelectedCards();
-    drawCards(Math.min(8 - STATE.handCards.length, STATE.deck.length));
+    } else {
+        // --- 継続 ---
+        infoText.text = `Scored: ${earnedScore}`;
+        scoreText.text = "";
+        
+        // カード補充 (勝利時は補充しない)
+        drawCards(Math.min(8 - STATE.handCards.length, STATE.deck.length));
+    }
 }
 
-// 次のラウンドへ
 function nextRound() {
-    // 盤面クリア
     STATE.handCards.forEach(c => gameContainer.removeChild(c));
     STATE.handCards = [];
     
@@ -162,13 +183,14 @@ function nextRound() {
         STATE.ante++;
     }
     
-    infoText.text = `Round ${STATE.round} / Ante ${STATE.ante}`;
-    infoText.style.fill = 0xFFFFFF;
+    // UI復帰
+    btnPlay.alpha = 0.5; btnDiscard.alpha = 0.5;
+    
     startRound();
 }
 
-// ディスカード実行
 function onDiscard() {
+    if (STATE.isRoundOver) return;
     const selected = STATE.handCards.filter(c => c.selected);
     if (selected.length === 0 || STATE.discards <= 0) return;
 
@@ -195,19 +217,14 @@ function removeSelectedCards() {
 // --- UI構築 ---
 
 function createHUD() {
-    // 左サイドバーの背景
     const bg = new PIXI.Graphics();
     bg.beginFill(0x2C3E50);
     bg.drawRect(0, 0, 250, window.innerHeight);
     bg.endFill();
     uiContainer.addChild(bg);
 
-    const style = new PIXI.TextStyle({
-        fontFamily: 'Arial', fontSize: 24, fill: 0xFFFFFF, fontWeight: 'bold'
-    });
-    const labelStyle = new PIXI.TextStyle({
-        fontFamily: 'Arial', fontSize: 18, fill: 0x95A5A6
-    });
+    const style = new PIXI.TextStyle({ fontFamily: 'Arial', fontSize: 24, fill: 0xFFFFFF, fontWeight: 'bold' });
+    const labelStyle = new PIXI.TextStyle({ fontFamily: 'Arial', fontSize: 18, fill: 0x95A5A6 });
 
     let y = 30;
     const addStat = (label, key, color = 0xFFFFFF) => {
@@ -223,12 +240,12 @@ function createHUD() {
         y += 70;
     };
 
-    addStat("SCORE / TARGET", "score", 0xFFFFFF); // 特別扱い
+    addStat("SCORE / TARGET", "score", 0xFFFFFF);
     y += 10;
-    addStat("HANDS", "hands", 0x3498DB); // Blue
-    addStat("DISCARDS", "discards", 0xE74C3C); // Red
-    addStat("MONEY", "dollars", 0xF1C40F); // Gold
-    addStat("ANTE", "ante", 0xE67E22); // Orange
+    addStat("HANDS", "hands", 0x3498DB);
+    addStat("DISCARDS", "discards", 0xE74C3C);
+    addStat("MONEY", "dollars", 0xF1C40F);
+    addStat("ANTE", "ante", 0xE67E22);
     addStat("ROUND", "round", 0xE67E22); 
 }
 
@@ -255,7 +272,6 @@ function createGameUI() {
     scoreText.anchor.set(0.5);
     uiContainer.addChild(scoreText);
 
-    // ボタン作成関数
     const createBtn = (text, color, onClick) => {
         const cnt = new PIXI.Container();
         const bg = new PIXI.Graphics();
@@ -282,7 +298,7 @@ function createGameUI() {
 }
 
 function layoutUI() {
-    const cx = app.screen.width / 2 + 125; // 左サイドバー(250px)分ずらす
+    const cx = app.screen.width / 2 + 125;
     const cy = app.screen.height;
 
     if(infoText) {
@@ -320,5 +336,10 @@ function layoutHand() {
     });
     gameContainer.sortableChildren = true;
 }
+
+app.ticker.add((delta) => {
+    // 常にUIレイヤーを手前に
+    app.stage.setChildIndex(uiContainer, app.stage.children.length - 1);
+});
 
 init();
