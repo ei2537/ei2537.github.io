@@ -6,6 +6,7 @@ import { PokerLogic } from './logic/PokerLogic.js';
 import { initPCards, initPCenters } from './definitions.js';
 
 // --- 1. Init PixiJS ---
+PIXI.BaseTexture.defaultOptions.scaleMode = PIXI.SCALE_MODES.NEAREST;
 const app = new PIXI.Application({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -33,6 +34,10 @@ const loader = PIXI.Assets;
 let atlasTexture = null;
 
 async function setup() {
+    // 複数の画像を読み込む
+    textures.cards = await loader.load('resources/textures/1x/8BitDeck.png');
+    textures.centers = await loader.load('resources/textures/1x/Enhancers.png'); // 裏面や強化カード用
+
     // Load Texture Atlas
     // ※パスは環境に合わせて確認してください (github pagesなら /games/balatro/resources/... かもしれません)
     atlasTexture = await loader.load('resources/textures/1x/8BitDeck.png');
@@ -55,7 +60,7 @@ async function setup() {
             G.CARD_W, G.CARD_H, 
             G.P_CARDS[key], 
             G.P_CENTERS['c_base'], 
-            atlasTexture
+            textures
         );
 
         // Add to Pixi Stage

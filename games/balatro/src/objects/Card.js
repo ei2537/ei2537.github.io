@@ -9,6 +9,7 @@ import { G } from '../globals.js';
 export class Card extends Moveable {
     /**
      * @param {Object} cardDef - { suit, value, name, pos } from G.P_CARDS
+     * @param {Object} textureSet - { cards: Texture, centers: Texture }
      * @param {Object} centerDef - { set, name, config, pos } from G.P_CENTERS (Back/Joker/etc)
      * @param {PIXI.Texture} atlasTexture - The loaded spritesheet texture
      */
@@ -18,6 +19,7 @@ export class Card extends Moveable {
         this.cardDef = cardDef;   // e.g. 2 of Hearts data
         this.centerDef = centerDef; // e.g. Red Deck or Joker data
         this.atlas = atlasTexture;
+        this.textureSet = textureSet;
 
         // Base stats (Rank, Suit, ID for poker eval)
         this.base = {
@@ -105,11 +107,11 @@ export class Card extends Moveable {
     initSprites() {
         const texW = 71; 
         const texH = 95;
-
+        
         // 1. Setup Card Back
         const backPos = G.P_CENTERS['b_red'] ? G.P_CENTERS['b_red'].pos : {x:0, y:0};
         const backRect = new PIXI.Rectangle(backPos.x * texW, backPos.y * texH, texW, texH);
-        const backTex = new PIXI.Texture(this.atlas.baseTexture, backRect);
+        const backTex = new PIXI.Texture(this.textureSet.centers.baseTexture, backRect);
         
         this.children.back = new PIXI.Sprite(backTex);
         this.children.back.anchor.set(0.5);
@@ -122,7 +124,7 @@ export class Card extends Moveable {
         if (this.cardDef) {
             const frontPos = this.cardDef.pos;
             const frontRect = new PIXI.Rectangle(frontPos.x * texW, frontPos.y * texH, texW, texH);
-            const frontTex = new PIXI.Texture(this.atlas.baseTexture, frontRect);
+            const frontTex = new PIXI.Texture(this.textureSet.cards.baseTexture, frontRect);
 
             this.children.front = new PIXI.Sprite(frontTex);
             this.children.front.anchor.set(0.5);
