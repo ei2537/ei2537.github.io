@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Balatro Web</title>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            background-color: #374244; /* G.C.DYN_UI.MAIN */
+        }
+        canvas { 
+            display: block; 
+        }
+    </style>
+    <!-- Import Map: これによりJS内で "import ... from 'pixi.js'" が動きます -->
+    <script type="importmap">
+        {
+            "imports": {
+                "pixi.js": "https://cdn.jsdelivr.net/npm/pixi.js@7.3.3/dist/pixi.mjs"
+            }
+        }
+    </script>
+</head>
+<body>
+    <!-- ゲームのエントリポイント -->
+    <script type="module" src="./src/main.js"></script>
+</body>
+</html>
