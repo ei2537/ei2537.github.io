@@ -3,12 +3,12 @@ import { AssetLoader } from './AssetLoader.js';
 import { CardSprite } from './CardSprite.js';
 import { JokerSprite } from './objects/JokerSprite.js';
 import { Button } from './objects/Button.js';
-import { Event, EventManager } from './engine/EventManager.js';
-import { Poker } from './Poker.js'; // ★修正: パスを ./logic/Poker.js から変更
+import { Poker } from './logic/Poker.js'; // ※Poker.jsの場所に合わせて調整してください（ルートなら ./Poker.js）
 import { initPCards, initPCenters, initHandStats, initJokers } from './definitions.js';
 import { G, C } from './globals.js';
+import { Event, EventManager } from './engine/EventManager.js';
 
-// --- Init ---
+// --- Init PixiJS ---
 PIXI.BaseTexture.defaultOptions.scaleMode = PIXI.SCALE_MODES.NEAREST;
 const app = new PIXI.Application({
     width: window.innerWidth,
@@ -18,12 +18,13 @@ const app = new PIXI.Application({
     autoDensity: true
 });
 document.body.appendChild(app.view);
+
 window.addEventListener('resize', () => {
     app.renderer.resize(window.innerWidth, window.innerHeight);
     layoutAll();
 });
 
-// --- Global & Layers ---
+// --- Global Setup ---
 G.E_MANAGER = new EventManager();
 initPCards();
 initPCenters();
@@ -32,72 +33,196 @@ initJokers();
 
 const pxToGu = (px) => px / (G.TILESIZE * G.TILESCALE);
 
-const jokerContainer = new PIXI.Container();
-const gameContainer = new PIXI.Container();
-const uiContainer = new PIXI.Container();
+// --- Layers ---
+const gameContainer = new PIXI.Container(); // カードプレイ画面用
+const shopContainer = new PIXI.Container(); // ショップ画面用
+const jokerContainer = new PIXI.Container(); // 所持ジョーカー（共通）
+const uiContainer = new PIXI.Container();   // UI（共通・最前面）
 
-// レイヤー順序
+// 描画順序
 app.stage.addChild(gameContainer);
+app.stage.addChild(shopContainer);
 app.stage.addChild(jokerContainer);
 app.stage.addChild(uiContainer);
 
-// --- State ---
+// --- Tooltip Setup (ツールチップ) ---
+const tooltipContainer = new PIXI.Container();
+const tooltipBg = new PIXI.Graphics();
+const tooltipText = new PIXI.Text('', {
+    fontFamily: 'Arial', fontSize: 20, fill: 0xFFFFFF,
+    align: 'center', wordWrap: true, wordWrapWidth: 200
+});
+tooltipContainer.addChild(tooltipBg);
+tooltipContainer.addChild(tooltipText);
+tooltipContainer.visible = false;
+uiContainer.addChild(tooltipContainer); // UIのさらに手前
+
+// グローバル関数として登録
+G.showTooltip = (text, targetBounds) => {
+    tooltipText.text = text;
+    const padding = 10;
+    const width = tooltipText.width + padding * 2;
+    const height = tooltipText.height + padding * 2;
+    
+    tooltipBg.clear();
+    tooltipBg.beginFill(0x000000, 0.9);
+    tooltipBg.lineStyle(2, 0xFFFFFF, 1);
+    tooltipBg.drawRoundedRect(0, 0, width, height, 5);
+    tooltipBg.endFill();
+    
+    tooltipText.x = padding;
+    tooltipText.y = padding;
+
+    // 位置合わせ
+    tooltipContainer.x = targetBounds.x + (targetBounds.width - width) / 2;
+    tooltipContainer.y = targetBounds.y - height - 10;
+    
+    // 画面外補正
+    if (tooltipContainer.x < 0) tooltipContainer.x = 10;
+    if (tooltipContainer.y < 0) tooltipContainer.y = targetBounds.y + targetBounds.height + 10;
+
+    tooltipContainer.visible = true;
+};
+
+G.hideTooltip = () => {
+    tooltipContainer.visible = false;
+};
+
+// --- Game State ---
+let currentScene = 'LOADING'; // LOADING, PLAYING, SHOP
 const STATE = {
     deck: [],
     handCards: [],
-    jokers: [],
+    jokers: [],     // 所持しているジョーカー
+    shopJokers: [], // ショップに並んでいるジョーカー
     score: 0,
     targetScore: 300,
     hands: 4,
     discards: 3,
     ante: 1,
+    dollars: 4,
     round: 1,
     isRoundOver: false
 };
 
 // UI Refs
-let infoText, scoreText, btnPlay, btnDiscard;
+let infoText, scoreText, btnPlay, btnDiscard, btnNextRound;
 let hudTexts = {};
 
+// --- Initialization ---
 async function init() {
     await AssetLoader.load();
     createHUD();
     createGameUI();
     
-    // 初期ジョーカー
-    addJoker('j_joker');
-    addJoker('j_banner');
-    
-    startRound();
+    // 最初はショップから開始（デッキ構築フェーズ的な意味で）
+    changeScene('SHOP');
 }
 
-function addJoker(key) {
-    if (STATE.jokers.length >= 5) return;
+// --- Scene Management ---
+function changeScene(scene) {
+    currentScene = scene;
     
-    const def = G.P_JOKERS[key];
-    const joker = new JokerSprite(key, def);
+    // UI表示切り替え
+    if (scene === 'PLAYING') {
+        gameContainer.visible = true;
+        shopContainer.visible = false;
+        btnPlay.visible = true;
+        btnDiscard.visible = true;
+        btnNextRound.visible = false;
+        
+        infoText.text = "Select cards";
+        infoText.style.fill = 0xFFFFFF;
+        
+        startRound();
+    } else if (scene === 'SHOP') {
+        gameContainer.visible = false;
+        shopContainer.visible = true;
+        btnPlay.visible = false;
+        btnDiscard.visible = false;
+        btnNextRound.visible = true;
+        
+        infoText.text = "SHOP - Buy Jokers";
+        infoText.style.fill = 0xAAAAAA;
+        scoreText.text = "";
+
+        // 所持ジョーカーの配置調整
+        layoutJokers(STATE.jokers, { y: 100 });
+        
+        // ショップの商品補充
+        populateShop();
+    }
+}
+
+// --- Shop Logic ---
+function populateShop() {
+    shopContainer.removeChildren();
+    STATE.shopJokers = [];
+
+    const jokerKeys = Object.keys(G.P_JOKERS);
+    // ランダムに3つ選出
+    for (let i = 0; i < 3; i++) {
+        const key = jokerKeys[Math.floor(Math.random() * jokerKeys.length)];
+        const def = G.P_JOKERS[key];
+        
+        // ジョーカー生成
+        const joker = new JokerSprite(key, def);
+        joker.price = 4; // 仮価格
+
+        // 購入ボタン追加
+        const btn = new Button(0, 150, 150, 50, `BUY $${joker.price}`, C.ORANGE, () => buyJoker(joker));
+        joker.container.addChild(btn);
+        joker.buyButton = btn;
+
+        STATE.shopJokers.push(joker);
+        shopContainer.addChild(joker.container);
+    }
+    
+    layoutJokers(STATE.shopJokers, { y: 350 }); // ショップエリアに配置
+}
+
+function buyJoker(joker) {
+    if (STATE.dollars < joker.price) return; // 金不足
+    if (STATE.jokers.length >= 5) return;    // 枠不足
+
+    // 支払い
+    STATE.dollars -= joker.price;
+    updateHUD();
+
+    // 管理リスト移動
+    const idx = STATE.shopJokers.indexOf(joker);
+    if (idx > -1) STATE.shopJokers.splice(idx, 1);
     STATE.jokers.push(joker);
-    jokerContainer.addChild(joker.container);
-    layoutJokers();
+
+    // コンテナ移動
+    shopContainer.removeChild(joker.container);
+    jokerContainer.addChild(joker.container); // 所持品レイヤーへ
+
+    // ボタン削除 & 設定変更
+    joker.container.removeChild(joker.buyButton);
+    joker.buyButton = null;
+    joker.container.cursor = 'help';
+
+    // 再配置
+    layoutJokers(STATE.shopJokers, { y: 350 });
+    layoutJokers(STATE.jokers, { y: 100 });
 }
 
+// --- Game Logic ---
 function startRound() {
     STATE.isRoundOver = false;
     STATE.score = 0;
     STATE.hands = 4;
     STATE.discards = 3;
     STATE.handCards = [];
+    
+    // 目標スコア計算
     STATE.targetScore = 300 * Math.pow(1.5, STATE.ante - 1) * STATE.round;
     STATE.targetScore = Math.floor(STATE.targetScore / 100) * 100;
 
     updateHUD();
     resetDeck();
     drawCards(8);
-    
-    infoText.text = "Select cards";
-    scoreText.text = "";
-    btnPlay.alpha = 0.5;
-    btnDiscard.alpha = 0.5;
 }
 
 function resetDeck() {
@@ -115,12 +240,14 @@ function drawCards(count) {
         const data = STATE.deck.pop();
         const card = new CardSprite(data.rank, data.suit);
         card.scale.set(2.5);
+        
         card.on('pointerdown', () => {
             if (STATE.isRoundOver) return;
             card.toggleSelect();
             updateScorePreview();
             layoutHand();
         });
+
         STATE.handCards.push(card);
         gameContainer.addChild(card.container);
     }
@@ -143,12 +270,11 @@ function calculateScore(selectedCards) {
 
     let scoreObj = { chips: chips, mult: mult };
 
+    // ジョーカー効果適用
     STATE.jokers.forEach(joker => {
         if (joker.def.effect) {
             const triggered = joker.def.effect(scoreObj, context);
-            if (triggered) {
-                joker.triggerEffect();
-            }
+            if (triggered) joker.triggerEffect();
         }
     });
 
@@ -190,17 +316,30 @@ function onPlay() {
     
     STATE.score += result.total;
     STATE.hands--;
-    updateHUD();
+    // 勝利報酬（仮）
+    STATE.dollars += 4; 
 
+    updateHUD();
     removeSelectedCards();
 
     if (STATE.score >= STATE.targetScore) {
         STATE.isRoundOver = true;
         infoText.text = "BLIND DEFEATED!";
-        infoText.style.fill = 0xF1C40F;
+        infoText.style.fill = 0xF1C40F; 
         scoreText.text = "";
         btnPlay.alpha = 0; btnDiscard.alpha = 0;
-        setTimeout(nextRound, 2000);
+        
+        // 勝利したらショップへ
+        setTimeout(() => {
+            // クリーンアップ
+            STATE.handCards.forEach(c => gameContainer.removeChild(c.container));
+            STATE.handCards = [];
+            STATE.round++;
+            if (STATE.round > 3) { STATE.round = 1; STATE.ante++; }
+            
+            changeScene('SHOP');
+        }, 2000);
+
     } else if (STATE.hands === 0) {
         STATE.isRoundOver = true;
         infoText.text = "GAME OVER";
@@ -217,18 +356,6 @@ function onPlay() {
             drawCards(Math.min(8 - STATE.handCards.length, STATE.deck.length));
         }, 1200);
     }
-}
-
-function nextRound() {
-    STATE.handCards.forEach(c => gameContainer.removeChild(c.container));
-    STATE.handCards = [];
-    STATE.round++;
-    if (STATE.round > 3) {
-        STATE.round = 1;
-        STATE.ante++;
-    }
-    btnPlay.alpha = 0.5; btnDiscard.alpha = 0.5;
-    startRound();
 }
 
 function onDiscard() {
@@ -252,6 +379,63 @@ function removeSelectedCards() {
         }
     });
     STATE.handCards = keep;
+}
+
+// --- Layouts & UI ---
+
+function layoutAll() {
+    layoutJokers(STATE.jokers, { y: 100 });
+    if(currentScene === 'SHOP') layoutJokers(STATE.shopJokers, { y: 350 });
+    
+    layoutHand();
+    layoutUI();
+}
+
+function layoutUI() {
+    const cx = app.screen.width / 2 + 125;
+    const cy = app.screen.height;
+
+    infoText.x = cx;
+    infoText.y = 250;
+    scoreText.x = cx;
+    scoreText.y = 300;
+
+    btnPlay.x = cx - 120;
+    btnPlay.y = cy - 200;
+    btnDiscard.x = cx + 120;
+    btnDiscard.y = cy - 200;
+
+    btnNextRound.x = cx;
+    btnNextRound.y = cy - 100;
+}
+
+function layoutJokers(jokerList, options = {}) {
+    const yPos = options.y || 100;
+    jokerList.forEach((joker, i) => {
+        const total = jokerList.length;
+        const offset = i - (total - 1) / 2;
+        // MoveableのTを更新
+        joker.T.x = (app.screen.width / 2 + 125) + offset * 120; // 125はサイドバー分
+        joker.T.y = yPos;
+        joker.T.r = 0;
+    });
+}
+
+function layoutHand() {
+    const centerX = app.screen.width / 2 + 125;
+    const centerY = app.screen.height - 150;
+    STATE.handCards.forEach((card, i) => {
+        const offset = i - (STATE.handCards.length - 1) / 2;
+        card.x = offset * 90; 
+        let targetY = Math.abs(offset) * 10; 
+        if (card.selected) targetY -= 40; 
+        card.y = targetY;
+        card.rotation = offset * 0.05;
+        card.zIndex = i;
+    });
+    gameContainer.x = centerX;
+    gameContainer.y = centerY;
+    gameContainer.sortableChildren = true;
 }
 
 function createHUD() {
@@ -299,78 +483,18 @@ function createGameUI() {
     scoreText = new PIXI.Text('', { ...style, fontSize: 24, fill: 0xFFCC00 });
     scoreText.anchor.set(0.5);
     uiContainer.addChild(scoreText);
-    const createBtn = (text, color, onClick) => {
-        const cnt = new PIXI.Container();
-        const bg = new PIXI.Graphics();
-        bg.beginFill(color);
-        bg.lineStyle(2, 0xFFFFFF);
-        bg.drawRoundedRect(-100, -30, 200, 60, 10);
-        bg.endFill();
-        const txt = new PIXI.Text(text, { fontFamily:'Arial', fontSize:24, fill:0xFFFFFF, fontWeight:'bold' });
-        txt.anchor.set(0.5);
-        cnt.addChild(bg, txt);
-        cnt.eventMode = 'static';
-        cnt.cursor = 'pointer';
-        cnt.on('pointerdown', onClick);
-        return cnt;
-    };
-    btnPlay = createBtn("PLAY HAND", 0xE67E22, onPlay);
+
+    btnPlay = new Button(0, 0, 200, 60, "PLAY HAND", C.ORANGE, onPlay);
     uiContainer.addChild(btnPlay);
-    btnDiscard = createBtn("DISCARD", 0xE74C3C, onDiscard);
+    btnDiscard = new Button(0, 0, 200, 60, "DISCARD", C.RED, onDiscard);
     uiContainer.addChild(btnDiscard);
+    btnNextRound = new Button(0, 0, 240, 60, "NEXT ROUND", C.BLUE, () => changeScene('PLAYING'));
+    uiContainer.addChild(btnNextRound);
     
-    layoutAll();
+    layoutUI();
 }
 
-function layoutAll() {
-    const cx = app.screen.width / 2 + 125;
-    const cy = app.screen.height;
-
-    // ジョーカーエリア
-    jokerContainer.y = 100;
-    jokerContainer.x = app.screen.width / 2 + 125;
-    
-    layoutJokers();
-    layoutHand();
-    
-    if(infoText) {
-        infoText.x = cx;
-        infoText.y = 250;
-        scoreText.x = cx;
-        scoreText.y = 300;
-        btnPlay.x = cx - 120;
-        btnPlay.y = cy - 250;
-        btnDiscard.x = cx + 120;
-        btnDiscard.y = cy - 250;
-    }
-}
-
-function layoutJokers() {
-    STATE.jokers.forEach((joker, i) => {
-        const offset = i - (STATE.jokers.length - 1) / 2;
-        joker.T.x = offset * (G.CARD_W * 1.1);
-        joker.T.y = 0;
-        joker.T.r = 0;
-    });
-}
-
-function layoutHand() {
-    const centerX = app.screen.width / 2 + 125;
-    const centerY = app.screen.height - 100;
-    gameContainer.x = centerX;
-    gameContainer.y = centerY;
-    STATE.handCards.forEach((card, i) => {
-        const offset = i - (STATE.handCards.length - 1) / 2;
-        card.x = offset * 90; 
-        let targetY = Math.abs(offset) * 10; 
-        if (card.selected) targetY -= 40; 
-        card.y = targetY;
-        card.rotation = offset * 0.05;
-        card.zIndex = i;
-    });
-    gameContainer.sortableChildren = true;
-}
-
+// --- Main Loop ---
 app.ticker.add((delta) => {
     const dt = delta / 60; 
     G.TIMERS.REAL += dt;
@@ -378,8 +502,7 @@ app.ticker.add((delta) => {
     G.E_MANAGER.update(dt);
     
     G.I.CARD.forEach(c => c.update(dt));
-    G.I.UIBOX.forEach(u => u.update(dt));
-    STATE.jokers.forEach(j => j.update(dt));
+    [...STATE.jokers, ...STATE.shopJokers].forEach(j => j.update(dt));
 });
 
 init();

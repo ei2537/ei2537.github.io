@@ -1,64 +1,34 @@
 import * as PIXI from 'pixi.js';
-import { G, C } from '../globals.js';
-import { Moveable } from '../engine/Moveable.js';
 
-export class Button extends Moveable {
-    constructor(x, y, w, h, text, color, callback) {
-        super(x, y, w, h);
-        this.callback = callback;
-        this.color = color;
-        this.textString = text;
+export class Button extends PIXI.Container {
+    constructor(x, y, width, height, text, color, callback) {
+        super();
+        this.position.set(x, y);
+        
+        const bg = new PIXI.Graphics();
+        bg.beginFill(color);
+        bg.lineStyle(2, 0xFFFFFF);
+        bg.drawRoundedRect(-width/2, -height/2, width, height, 10);
+        bg.endFill();
+        this.addChild(bg);
 
-        this.container = new PIXI.Container();
-        this.container.eventMode = 'static';
-        this.container.cursor = 'pointer';
-
-        this.bg = new PIXI.Graphics();
-        this.container.addChild(this.bg);
-
-        this.text = new PIXI.Text(text, {
-            fontFamily: 'Arial', fontSize: 24, fill: 0xFFFFFF, fontWeight: 'bold', align: 'center',
+        const txt = new PIXI.Text(text, { 
+            fontFamily:'Arial', fontSize:24, fill:0xFFFFFF, fontWeight:'bold',
+            align: 'center'
         });
-        this.text.anchor.set(0.5);
-        this.container.addChild(this.text);
+        txt.anchor.set(0.5);
+        this.addChild(txt);
 
-        this.container.on('pointerdown', () => this.onClick());
-        this.container.on('pointerover', () => this.onHover());
-        this.container.on('pointerout', () => this.onOut());
+        this.eventMode = 'static';
+        this.cursor = 'pointer';
+        
+        this.on('pointerdown', (e) => {
+            e.stopPropagation(); // イベント伝播を止める
+            if(callback) callback();
+        });
 
-        this.redraw();
-    }
-
-    onClick() {
-        this.juiceUp(0.3, 0.1);
-        if (this.callback) this.callback();
-    }
-
-    onHover() {
-        this.VT.scale = 1.1; 
-    }
-
-    onOut() {
-        this.VT.scale = 1.0;
-    }
-
-    redraw() {
-        const pxW = this.T.w * G.TILESIZE * G.TILESCALE;
-        const pxH = this.T.h * G.TILESIZE * G.TILESCALE;
-        this.bg.clear();
-        this.bg.beginFill(this.color);
-        this.bg.lineStyle(2, C.WHITE, 1);
-        this.bg.drawRoundedRect(-pxW/2, -pxH/2, pxW, pxH, 10);
-        this.bg.endFill();
-        this.container.hitArea = new PIXI.Rectangle(-pxW/2, -pxH/2, pxW, pxH);
-    }
-
-    update(dt) {
-        super.update(dt);
-        const pxX = this.VT.x * G.TILESIZE * G.TILESCALE;
-        const pxY = this.VT.y * G.TILESIZE * G.TILESCALE;
-        this.container.position.set(pxX, pxY);
-        this.container.scale.set(this.VT.scale);
-        this.container.rotation = this.VT.r;
+        // ホバーエフェクト
+        this.on('pointerover', () => this.scale.set(1.1));
+        this.on('pointerout', () => this.scale.set(1.0));
     }
 }

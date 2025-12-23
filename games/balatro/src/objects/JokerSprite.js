@@ -5,49 +5,61 @@ import { Moveable } from '../engine/Moveable.js';
 
 export class JokerSprite extends Moveable {
     constructor(key, jokerDef) {
-        // ジョーカーのサイズはカードと同じ
         super(0, 0, G.CARD_W, G.CARD_H);
         
         this.key = key;
         this.def = jokerDef;
         this.container = new PIXI.Container();
 
+        this.price = 0;
+        this.buyButton = null;
+
         // 画像生成
         const tex = AssetLoader.getJokerTexture(jokerDef.pos);
         this.sprite = new PIXI.Sprite(tex);
         this.sprite.anchor.set(0.5);
         
-        // サイズ合わせ
         this.sprite.width = this.T.w * G.TILESIZE;
         this.sprite.height = this.T.h * G.TILESIZE;
 
         this.container.addChild(this.sprite);
 
-        // 物理演算用
         this.container.eventMode = 'static';
-        this.container.cursor = 'help'; // ホバーで説明出る感
+        this.container.cursor = 'help';
         
+        // --- Tooltip Event Listeners ---
         this.container.on('pointerover', () => {
             this.VT.scale = 1.1;
-            this.container.zIndex = 100; // 最前面へ
+            this.container.zIndex = 100;
+
+            // 画面上の絶対座標を取得してツールチップを表示
+            const bounds = this.container.getBounds();
+            if (G.showTooltip) {
+                G.showTooltip(this.def.desc, bounds);
+            }
         });
+
         this.container.on('pointerout', () => {
             this.VT.scale = 1.0;
             this.container.zIndex = 0;
+            
+            // ツールチップ非表示
+            if (G.hideTooltip) {
+                G.hideTooltip();
+            }
         });
     }
 
-    // 効果発動時のアニメーション
     triggerEffect() {
-        this.juiceUp(0.6, 0.2); // ぷるんと揺れる
-        // TODO: ここに「+4 Mult」みたいなポップアップを出すと完璧
+        this.juiceUp(0.6, 0.2);
     }
 
     update(dt) {
         super.update(dt);
         
-        const pxX = this.VT.x * G.TILESIZE * G.TILESCALE;
-        const pxY = this.VT.y * G.TILESIZE * G.TILESCALE;
+        // Pixi座標変換 (物理演算 -> 描画)
+        const pxX = this.VT.x; // layoutJokersでPixi座標系を入れているため変換不要
+        const pxY = this.VT.y;
         
         this.container.position.set(pxX, pxY);
         this.container.scale.set(this.VT.scale * G.TILESCALE);
