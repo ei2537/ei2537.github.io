@@ -9,16 +9,16 @@ import { G } from '../globals.js';
 export class Card extends Moveable {
     /**
      * @param {Object} cardDef - { suit, value, name, pos } from G.P_CARDS
-     * @param {Object} textureSet - { cards: Texture, centers: Texture }
      * @param {Object} centerDef - { set, name, config, pos } from G.P_CENTERS (Back/Joker/etc)
-     * @param {PIXI.Texture} atlasTexture - The loaded spritesheet texture
+     * @param {Object} textureSet - { cards: Texture, centers: Texture }
      */
-    constructor(x, y, w, h, cardDef, centerDef, atlasTexture) {
+    constructor(x, y, w, h, cardDef, centerDef, textureSet) {
         super(x, y, w, h);
         
         this.cardDef = cardDef;   // e.g. 2 of Hearts data
         this.centerDef = centerDef; // e.g. Red Deck or Joker data
-        this.atlas = atlasTexture;
+        
+        // 重要: ここで受け取った textureSet を this.textureSet に保存します
         this.textureSet = textureSet;
 
         // Base stats (Rank, Suit, ID for poker eval)
@@ -97,7 +97,6 @@ export class Card extends Moveable {
      * @param {string} suit - 'Hearts', 'Clubs', etc.
      */
     isSuit(suit) {
-        // TODO: Add Stone Card check, Wild Card check, Debuff check
         return this.base.suit === suit;
     }
 
@@ -107,9 +106,12 @@ export class Card extends Moveable {
     initSprites() {
         const texW = 71; 
         const texH = 95;
-        
-        // 1. Setup Card Back
+
+        // 1. Setup Card Back (裏面)
+        // Red Deckの座標を取得（なければ 0,0）
         const backPos = G.P_CENTERS['b_red'] ? G.P_CENTERS['b_red'].pos : {x:0, y:0};
+        
+        // 修正ポイント: this.textureSet.centers を使う
         const backRect = new PIXI.Rectangle(backPos.x * texW, backPos.y * texH, texW, texH);
         const backTex = new PIXI.Texture(this.textureSet.centers.baseTexture, backRect);
         
@@ -120,9 +122,11 @@ export class Card extends Moveable {
         this.children.back.visible = false;
         this.container.addChild(this.children.back);
 
-        // 2. Setup Front (Rank & Suit)
+        // 2. Setup Front (表面)
         if (this.cardDef) {
             const frontPos = this.cardDef.pos;
+            
+            // 修正ポイント: this.textureSet.cards を使う
             const frontRect = new PIXI.Rectangle(frontPos.x * texW, frontPos.y * texH, texW, texH);
             const frontTex = new PIXI.Texture(this.textureSet.cards.baseTexture, frontRect);
 
@@ -134,6 +138,9 @@ export class Card extends Moveable {
         }
     }
 
+    /**
+     * Trigger a flip animation
+     */
     flip() {
         if (this.facing === 'front') {
             this.facing = 'back';
@@ -144,9 +151,13 @@ export class Card extends Moveable {
         }
     }
 
+    /**
+     * Main update loop for Card
+     */
     update(dt) {
         super.update(dt);
 
+        // フリップアニメーションの制御（幅が極小になったら絵柄を切り替える）
         if (this.pinch.x && this.VT.w < 0.1) {
             if (this.facing === 'back') {
                 this.spriteFacing = 'back';
@@ -156,13 +167,19 @@ export class Card extends Moveable {
             this.pinch.x = false;
         }
 
+        // ゲーム内座標(VT)をPixiJSの描画座標(px)に変換
         const pixelX = this.VT.x * G.TILESIZE * G.TILESCALE;
         const pixelY = this.VT.y * G.TILESIZE * G.TILESCALE;
         
-        this.container.position.set(pixelX + (this.VT.w * G.TILESIZE * G.TILESCALE / 2), pixelY + (this.VT.h * G.TILESIZE * G.TILESCALE / 2));
+        // コンテナの更新
+        this.container.position.set(
+            pixelX + (this.VT.w * G.TILESIZE * G.TILESCALE / 2), 
+            pixelY + (this.VT.h * G.TILESIZE * G.TILESCALE / 2)
+        );
         this.container.rotation = this.VT.r;
         this.container.scale.set(this.VT.scale * G.TILESCALE, this.VT.scale * G.TILESCALE);
 
+        // フリップ時の歪み補正（コンテナはJuiceで変形させたいので、子供のスプライトだけ潰す）
         const squeezeFactor = this.VT.w / this.T.w;
         
         if (this.children.front) {
