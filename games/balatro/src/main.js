@@ -1,12 +1,12 @@
 import * as PIXI from 'pixi.js';
 import { AssetLoader } from './AssetLoader.js';
 import { CardSprite } from './CardSprite.js';
-import { JokerSprite } from './objects/JokerSprite.js'; // 追加
+import { JokerSprite } from './objects/JokerSprite.js';
 import { Button } from './objects/Button.js';
 import { Event, EventManager } from './engine/EventManager.js';
-import { Poker } from './logic/Poker.js';
-import { initPCards, initPCenters, initHandStats, initJokers } from './definitions.js'; // initJokers追加
-import { G, C } from './globals.js'; // Cを追加
+import { Poker } from './Poker.js'; // ★修正: パスを ./logic/Poker.js から変更
+import { initPCards, initPCenters, initHandStats, initJokers } from './definitions.js';
+import { G, C } from './globals.js';
 
 // --- Init ---
 PIXI.BaseTexture.defaultOptions.scaleMode = PIXI.SCALE_MODES.NEAREST;
@@ -28,24 +28,24 @@ G.E_MANAGER = new EventManager();
 initPCards();
 initPCenters();
 initHandStats();
-initJokers(); // ジョーカー定義初期化
+initJokers();
 
 const pxToGu = (px) => px / (G.TILESIZE * G.TILESCALE);
 
-const jokerContainer = new PIXI.Container(); // ジョーカー用レイヤー
+const jokerContainer = new PIXI.Container();
 const gameContainer = new PIXI.Container();
 const uiContainer = new PIXI.Container();
 
 // レイヤー順序
-app.stage.addChild(gameContainer); // カード
-app.stage.addChild(jokerContainer); // ジョーカー（カードより上）
-app.stage.addChild(uiContainer);   // UI（最前面）
+app.stage.addChild(gameContainer);
+app.stage.addChild(jokerContainer);
+app.stage.addChild(uiContainer);
 
 // --- State ---
 const STATE = {
     deck: [],
     handCards: [],
-    jokers: [], // 所持ジョーカーリスト
+    jokers: [],
     score: 0,
     targetScore: 300,
     hands: 4,
@@ -64,15 +64,15 @@ async function init() {
     createHUD();
     createGameUI();
     
-    // --- 初期ジョーカー配布（テスト用） ---
-    addJoker('j_joker');         // +4 Mult
-    addJoker('j_banner'); // 残りDiscardでChips
+    // 初期ジョーカー
+    addJoker('j_joker');
+    addJoker('j_banner');
     
     startRound();
 }
 
 function addJoker(key) {
-    if (STATE.jokers.length >= 5) return; // 最大5枚
+    if (STATE.jokers.length >= 5) return;
     
     const def = G.P_JOKERS[key];
     const joker = new JokerSprite(key, def);
@@ -128,33 +128,25 @@ function drawCards(count) {
     updateScorePreview();
 }
 
-// --- スコア計算の強化 ---
 function calculateScore(selectedCards) {
     const pokerResult = Poker.evaluate(selectedCards);
     
-    // ベーススコア
     let chips = pokerResult.baseChips + pokerResult.playedChips;
     let mult = pokerResult.baseMult;
 
-    // ジョーカー計算用コンテキスト
     const context = {
-        scoringCards: selectedCards, // 役に使われたカード（今回は全選択カード）
+        scoringCards: selectedCards,
         discards: STATE.discards,
         hands: STATE.hands,
         dollars: STATE.dollars
     };
 
-    // スコア計算オブジェクト
     let scoreObj = { chips: chips, mult: mult };
 
-    // ジョーカー効果適用ループ
-    // 演出のため、非同期(await)でやりたいところですが、まずは計算ロジックのみ
     STATE.jokers.forEach(joker => {
         if (joker.def.effect) {
-            // 効果適用
             const triggered = joker.def.effect(scoreObj, context);
             if (triggered) {
-                // 発動したら演出を入れる（ここでは即時）
                 joker.triggerEffect();
             }
         }
@@ -174,13 +166,8 @@ function updateScorePreview() {
     const selected = STATE.handCards.filter(c => c.selected);
     
     if (selected.length > 0) {
-        // プレビューではジョーカー計算を含めないのがBalatro流儀だが、
-        // わかりやすさのため簡易計算結果を表示しても良い。
-        // ここではPokerの素点だけ出す。
         const result = Poker.evaluate(selected);
         infoText.text = result.name;
-        
-        // 簡易プレビュー
         scoreText.text = `Base: ${result.baseChips + result.playedChips} x ${result.baseMult}`; 
 
         const canPlay = selected.length <= 5 && STATE.hands > 0;
@@ -199,7 +186,6 @@ function onPlay() {
     const selected = STATE.handCards.filter(c => c.selected);
     if (selected.length === 0 || STATE.hands <= 0) return;
 
-    // ★ジョーカー込みのスコア計算
     const result = calculateScore(selected);
     
     STATE.score += result.total;
@@ -208,7 +194,6 @@ function onPlay() {
 
     removeSelectedCards();
 
-    // 勝利判定
     if (STATE.score >= STATE.targetScore) {
         STATE.isRoundOver = true;
         infoText.text = "BLIND DEFEATED!";
@@ -224,7 +209,6 @@ function onPlay() {
         btnPlay.alpha = 0; btnDiscard.alpha = 0;
     } else {
         infoText.text = `${result.name}!`;
-        // スコア演出
         scoreText.text = `${result.chips} x ${result.mult} = ${result.total}`;
         scoreText.style.fill = 0xFFCC00;
 
@@ -247,7 +231,6 @@ function nextRound() {
     startRound();
 }
 
-// ... (onDiscard, removeSelectedCards, createHUD, updateHUD は変更なし) ...
 function onDiscard() {
     if (STATE.isRoundOver) return;
     const selected = STATE.handCards.filter(c => c.selected);
@@ -258,6 +241,7 @@ function onDiscard() {
     removeSelectedCards();
     drawCards(Math.min(8 - STATE.handCards.length, STATE.deck.length));
 }
+
 function removeSelectedCards() {
     const keep = [];
     STATE.handCards.forEach(c => {
@@ -269,6 +253,7 @@ function removeSelectedCards() {
     });
     STATE.handCards = keep;
 }
+
 function createHUD() {
     const bg = new PIXI.Graphics();
     bg.beginFill(0x2C3E50);
@@ -296,6 +281,7 @@ function createHUD() {
     addStat("ANTE", "ante", 0xE67E22);
     addStat("ROUND", "round", 0xE67E22); 
 }
+
 function updateHUD() {
     hudTexts.score.text = `${STATE.score} / ${STATE.targetScore}`;
     hudTexts.hands.text = STATE.hands;
@@ -305,9 +291,7 @@ function updateHUD() {
     hudTexts.round.text = STATE.round;
 }
 
-// UI生成
 function createGameUI() {
-    // ... (前回と同じ) ...
     const style = new PIXI.TextStyle({ fontFamily: 'Arial', fontSize: 36, fill: 0xFFFFFF, fontWeight: 'bold', dropShadow: true, dropShadowDistance: 2, align: 'center' });
     infoText = new PIXI.Text('Select cards', style);
     infoText.anchor.set(0.5);
@@ -338,14 +322,12 @@ function createGameUI() {
     layoutAll();
 }
 
-// レイアウト関数
 function layoutAll() {
     const cx = app.screen.width / 2 + 125;
     const cy = app.screen.height;
 
-    // ジョーカーエリア (上部)
-    const jokerY = pxToGu(100);
-    jokerContainer.y = 100; // Pixi座標
+    // ジョーカーエリア
+    jokerContainer.y = 100;
     jokerContainer.x = app.screen.width / 2 + 125;
     
     layoutJokers();
@@ -353,7 +335,7 @@ function layoutAll() {
     
     if(infoText) {
         infoText.x = cx;
-        infoText.y = 250; // ジョーカーの下
+        infoText.y = 250;
         scoreText.x = cx;
         scoreText.y = 300;
         btnPlay.x = cx - 120;
@@ -397,7 +379,7 @@ app.ticker.add((delta) => {
     
     G.I.CARD.forEach(c => c.update(dt));
     G.I.UIBOX.forEach(u => u.update(dt));
-    STATE.jokers.forEach(j => j.update(dt)); // ジョーカー更新
+    STATE.jokers.forEach(j => j.update(dt));
 });
 
 init();
