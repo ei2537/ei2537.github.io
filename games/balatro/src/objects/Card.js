@@ -51,11 +51,25 @@ export class Card extends Moveable {
             this.initBase(this.cardDef);
         }
         this.initSprites();
+        this.selected = false;
     }
 
     /**
      * Initialize base stats based on card definition (Ported from card.lua set_base)
      */
+    toggleSelection() {
+        this.selected = !this.selected;
+        
+        // 選択されたら少し上に浮く (Y座標を操作)
+        // MoveableのTarget(T)を書き換えるだけで、update()内の物理演算がアニメーションしてくれる
+        if (this.selected) {
+            this.T.y -= 0.5; // ゲーム単位で0.5上に
+            this.juiceUp(0.5, 0.1); // ぷるんとさせる
+        } else {
+            this.T.y += 0.5; // 元に戻す
+            this.juiceUp(0.3, 0.05);
+        }
+    }
     initBase(card) {
         this.base.name = card.name;
         this.base.suit = card.suit;
