@@ -30,29 +30,25 @@ export class Poker {
      * 選択されたカードから役とスコアを計算
      */
     static evaluate(cards) {
-        // カードがなければハイカード扱い
         if (cards.length === 0) return this.formatResult("High Card", []);
 
-        // データを扱いやすく整形
         const handData = cards.map(c => ({
             id: this.RANK_TO_ID[c.rank],
             chip: this.RANK_TO_CHIPS[c.rank],
             suit: c.suit,
             card: c
-        })).sort((a, b) => a.id - b.id); // ID順にソート
+        })).sort((a, b) => a.id - b.id);
 
-        // --- 判定ロジック ---
-        const counts = {}; // ランクごとの枚数
-        const suits = {};  // スートごとの枚数
+        const counts = {};
+        const suits = {};
         handData.forEach(c => {
             counts[c.id] = (counts[c.id] || 0) + 1;
             suits[c.suit] = (suits[c.suit] || 0) + 1;
         });
 
-        const countValues = Object.values(counts).sort((a, b) => b - a); // 枚数の多い順 (例: FullHouseなら [3, 2])
+        const countValues = Object.values(counts).sort((a, b) => b - a);
         const isFlush = Object.values(suits).some(count => count >= 5);
         
-        // ストレート判定
         let isStraight = false;
         if (handData.length >= 5) {
             let consecutive = 1;
@@ -61,10 +57,8 @@ export class Poker {
                 else if (handData[i+1].id !== handData[i].id) consecutive = 1;
                 if (consecutive >= 5) isStraight = true;
             }
-            // Ace Low Straight (A, 2, 3, 4, 5) の特例判定は省略（必要なら追加）
         }
 
-        // 役の決定（優先度順）
         let handName = "High Card";
 
         if (isFlush && isStraight) {
@@ -92,7 +86,6 @@ export class Poker {
 
     static formatResult(name, cards) {
         const stats = this.HAND_STATS[name];
-        // カード自体のチップを加算
         let playedChips = 0;
         cards.forEach(c => playedChips += c.chip);
 

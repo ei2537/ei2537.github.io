@@ -3,7 +3,7 @@ import { AssetLoader } from './AssetLoader.js';
 import { CardSprite } from './CardSprite.js';
 import { JokerSprite } from './objects/JokerSprite.js';
 import { Button } from './objects/Button.js';
-import { Poker } from './logic/Poker.js'; // ※Poker.jsの場所に合わせて調整してください（ルートなら ./Poker.js）
+import { Poker } from './Poker.js';
 import { initPCards, initPCenters, initHandStats, initJokers } from './definitions.js';
 import { G, C } from './globals.js';
 import { Event, EventManager } from './engine/EventManager.js';
