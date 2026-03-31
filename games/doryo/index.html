@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mabuchi Survival</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English&family=Courier+Prime&family=Josefin+Sans:wght@300;400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="titleScreen" class="screen">
+  <div class="title-wrap">
+    <h1>Mabuchi&nbsp;&nbsp;Survival</h1>
+    <div class="title-rule"></div>
+    <div class="title-sub">No Escape.</div>
+  </div>
+  <div class="role-toggle">
+    <button class="role-btn selected" data-role="survivor">survivor</button>
+    <button class="role-btn" data-role="killer">killer</button>
+  </div>
+  <button class="btn-primary" id="startBtn">enter</button>
+  <div class="ctrl-grid">
+    <div class="ctrl-row"><span class="ctrl-key">WASD</span>move</div>
+    <div class="ctrl-row"><span class="ctrl-key">E</span>interact / repair</div>
+    <div class="ctrl-row"><span class="ctrl-key">SHIFT</span>sprint</div>
+    <div class="ctrl-row"><span class="ctrl-key">SPC</span>attack / skill check</div>
+    <div class="ctrl-row"><span class="ctrl-key">M</span>toggle map</div>
+  </div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div id="hud">
+  <div class="hud-top">
+    <div class="gen-panel" id="genPanel"></div>
+    <div class="hud-timer"><span class="timer-val" id="timerVal">00:00</span><div class="timer-label">elapsed</div></div>
+    <div class="survivor-panel" id="survivorPanel"></div>
+  </div>
+  <div class="hud-bottom">
+    <div id="repairGauge" class="sprint-gauge">
+      <div class="sprint-label" id="repairLabel" style="color:var(--gen)">repairing</div>
+      <div class="sprint-bar"><div class="sprint-fill" id="repairFill" style="background:var(--gen)"></div></div>
+    </div>
+    <div id="sprintGauge" class="sprint-gauge">
+      <div class="sprint-label" id="sprintLabel">sprint</div>
+      <div class="sprint-bar"><div class="sprint-fill" id="sprintFill"></div></div>
+    </div>
+    <div class="action-hint" id="actionHint"></div>
+  </div>
+  <canvas id="minimap" width="110" height="80"></canvas>
+</div>
+
+<div id="bigMapOverlay">
+  <canvas id="bigMap" width="520" height="380"></canvas>
+  <div class="bigmap-label">[m] close map</div>
+</div>
+
+<div id="notify"></div>
+
+<div id="resultScreen" class="screen hidden">
+  <div class="result-title" id="resultTitle"></div>
+  <div class="result-sub" id="resultSub"></div>
+  <div class="result-stats" id="resultStats"></div>
+  <button class="btn-primary" id="retryBtn" style="margin-top:0">retry</button>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
