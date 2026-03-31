@@ -1,7 +1,7 @@
 /** @fileoverview Entry point — game initialization, main loop, and screen transitions. */
 
 import S from './state.js';
-import { TILE, MAP_W, MAP_H, C, S_SPD, GEN_GOAL, DBG_FOG_OFF } from './config.js';
+import { TILE, MAP_W, MAP_H, C, S_SPD, GEN_GOAL, DBG_FOG_OFF, toggleScreenMode } from './config.js';
 import { MapGen } from './map.js';
 import { Survivor, Killer } from './entities.js';
 import { moveEnt } from './physics.js';
@@ -36,6 +36,10 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyM' && S.G && S.G.phase === 'play') {
     S.G.mapOpen = !S.G.mapOpen;
     document.getElementById('bigMapOverlay').classList.toggle('active', S.G.mapOpen);
+  }
+  if (e.code === 'KeyP') {
+    const mode = toggleScreenMode();
+    if (S.G && S.G.phase === 'play') notify('Screen Mode: ' + (mode ? 'ON' : 'OFF'));
   }
 });
 window.addEventListener('keyup', e => { S.keys[e.code] = false; });

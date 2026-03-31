@@ -504,3 +504,18 @@ body {
 canvas {
   display: block;
 }
+
+body.screen-mode {
+  --bg: #151514;
+  --surface: #1e1e1c;
+  --border: #4a4842;
+  --border2: #302f2b;
+  --text: #ffffff;
+  --dim: #9a958e;
+  --dim2: #6a665e;
+  --accent: #d0aa72;
+  --survivor: #85c5ed;
+  --killer: #d66464;
+  --gen: #e8c454;
+  --gen-done: #7db06a;
+}
