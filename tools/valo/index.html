@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VALORANT Shop Simulator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* =========================================
+       1. 基本設定
+    ========================================= */
+    :root {
+      --val-bg: #0f1923;
+      --val-bg-light: #1f2224;
+      --val-red: #ff4655;
+      --val-text: #ece8e1;
+      --val-text-muted: #8b979f;
+      --font-main: 'Oswald', 'Noto Sans JP', sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background-color: var(--val-bg); color: var(--val-text); font-family: var(--font-main); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
+
+    /* =========================================
+       2. ヘッダー
+    ========================================= */
+    header { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 3rem; background-color: rgba(15, 25, 35, 0.95); border-bottom: 1px solid rgba(255, 255, 255, 0.1); position: sticky; top: 0; z-index: 100; }
+    .nav-links { display: flex; gap: 2rem; }
+    .nav-btn { background: none; border: none; color: var(--val-text-muted); font-size: 1.5rem; font-family: var(--font-main); font-weight: 700; cursor: pointer; text-transform: uppercase; transition: color 0.3s; position: relative; }
+    .nav-btn.active, .nav-btn:hover { color: var(--val-text); }
+    .nav-btn.active::after { content: ''; position: absolute; bottom: -10px; left: 0; width: 100%; height: 3px; background-color: var(--val-red); }
+    .vp-display { font-size: 2rem; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+    .vp-icon { width: 24px; height: 24px; background-color: var(--val-red); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
+
+    /* =========================================
+       3. メインビュー & 共通UI
+    ========================================= */
+    main { padding: 3rem; flex: 1; }
+    .view-section { display: none; }
+    .view-section.active { display: block; animation: fadeIn 0.4s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .section-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 1rem; }
+    .section-title { font-size: 2.5rem; text-transform: uppercase; letter-spacing: 2px; }
+    
+    .timer-container { font-size: 1.5rem; color: var(--val-text-muted); }
+    #countdown { color: var(--val-text); font-weight: 700; }
+    .btn-debug { background-color: transparent; border: 1px solid var(--val-text-muted); color: var(--val-text-muted); padding: 5px 15px; cursor: pointer; font-family: var(--font-main); text-transform: uppercase; transition: 0.3s; }
+    .btn-debug:hover { border-color: var(--val-text); color: var(--val-text); }
+
+    /* =========================================
+       4. ストア & インベントリカード
+    ========================================= */
+    .store-grid, .inventory-grid { display: grid; gap: 1.5rem; }
+    .store-grid { grid-template-columns: repeat(4, 1fr); }
+    .inventory-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+    
+    .skin-card { background-color: var(--val-bg-light); border: 2px solid transparent; position: relative; display: flex; flex-direction: column; transition: all 0.3s; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%); cursor: pointer; }
+    .skin-card:hover { border-color: var(--val-red); transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+    
+    .card-tier-line { height: 4px; width: 100%; }
+    .card-image-container { height: 200px; display: flex; align-items: center; justify-content: center; padding: 1.5rem; background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%); }
+    .card-image-container img { max-width: 100%; max-height: 120px; object-fit: contain; transform: rotate(-15deg); transition: transform 0.3s; }
+    .skin-card:hover .card-image-container img { transform: rotate(-15deg) scale(1.1); }
+    
+    .card-info { padding: 1.5rem; background: linear-gradient(to top, rgba(0,0,0,0.5), transparent); display: flex; justify-content: space-between; align-items: center; z-index: 2;}
+    .skin-name { font-size: 1.2rem; font-weight: 700; text-transform: uppercase; line-height: 1.2; }
+    .skin-price { display: flex; align-items: center; gap: 5px; font-size: 1.2rem; font-weight: 700; margin-top: 5px;}
+
+    .btn-buy { background-color: transparent; border: 1px solid var(--val-text); color: var(--val-text); padding: 8px 25px; font-size: 1.2rem; font-family: var(--font-main); font-weight: 700; text-transform: uppercase; cursor: pointer; transform: skewX(-10deg); transition: all 0.2s; position: relative; z-index: 5;}
+    .btn-buy > span { display: inline-block; transform: skewX(10deg); }
+    .btn-buy:hover:not(:disabled) { background-color: var(--val-text); color: var(--val-bg); }
+    .btn-buy:disabled { border-color: var(--val-text-muted); color: var(--val-text-muted); cursor: not-allowed; }
+    .btn-buy.owned { background-color: #28a745; border-color: #28a745; color: white; }
+
+    /* 削除(×)ボタン */
+    .btn-remove { position: absolute; top: 10px; right: 10px; background: rgba(255, 70, 85, 0.8); border: none; color: white; width: 30px; height: 30px; border-radius: 50%; font-size: 1.2rem; font-weight: bold; cursor: pointer; z-index: 10; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
+    .btn-remove:hover { background: #ff4655; transform: scale(1.1); }
+
+    /* =========================================
+       5. Manage 画面 (カテゴリ・検索機能)
+    ========================================= */
+    #manage-view { max-height: 75vh; overflow-y: auto; padding-right: 15px; }
+    #manage-view::-webkit-scrollbar { width: 8px; }
+    #manage-view::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+    #manage-view::-webkit-scrollbar-thumb { background: var(--val-red); }
+
+    /* 検索バー */
+    .search-input { background: var(--val-bg-light); border: 1px solid var(--val-text-muted); color: var(--val-text); padding: 10px 15px; font-size: 1.2rem; font-family: var(--font-main); width: 300px; outline: none; transition: 0.3s; transform: skewX(-10deg); }
+    .search-input:focus { border-color: var(--val-red); background: #2a2e33; }
+    
+    .category-section { margin-bottom: 1.5rem; }
+    .category-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--val-text-muted); padding-bottom: 0.5rem; cursor: pointer; transition: 0.2s; }
+    .category-header:hover { border-color: var(--val-red); }
+    .category-header:hover .category-title { color: var(--val-red); }
+    .category-title { font-size: 1.8rem; text-transform: uppercase; color: var(--val-text); transition: 0.2s; }
+    .toggle-icon { font-size: 1.2rem; color: var(--val-text-muted); }
+
+    /* アコーディオン機能 (非表示/表示) */
+    .category-grid { display: none; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-top: 1rem; }
+    .category-grid.open { display: grid; animation: fadeIn 0.3s ease-out; }
+
+    .manage-item { display: flex; align-items: center; background: var(--val-bg-light); padding: 10px; gap: 15px; cursor: pointer; transition: 0.2s; }
+    .manage-item:hover { background: rgba(255,255,255,0.1); }
+    .manage-item img { width: 70px; height: 35px; object-fit: contain; }
+    input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--val-red); cursor: pointer; }
+
+    /* =========================================
+       6. スキン詳細モーダル (Video & Chroma)
+    ========================================= */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; backdrop-filter: blur(5px); }
+    .modal-overlay.active { opacity: 1; pointer-events: auto; }
+    
+    .modal-content { width: 90%; max-width: 1200px; height: 80vh; background: var(--val-bg); border: 1px solid rgba(255,255,255,0.2); position: relative; display: flex; flex-direction: column; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%); }
+    .modal-close { position: absolute; top: 20px; right: 20px; font-size: 2.5rem; color: var(--val-text-muted); background: none; border: none; cursor: pointer; z-index: 10; transition: 0.2s; }
+    .modal-close:hover { color: var(--val-red); }
+
+    .modal-body { display: flex; flex: 1; height: 100%; overflow: hidden; }
+    .modal-media { flex: 3; display: flex; justify-content: center; align-items: center; background: #000; position: relative; }
+    .modal-media video, .modal-media img { width: 100%; height: 100%; object-fit: contain; }
+
+    .modal-sidebar { flex: 1; min-width: 300px; padding: 2rem; background: var(--val-bg-light); display: flex; flex-direction: column; overflow-y: auto; }
+    .modal-title { font-size: 2rem; text-transform: uppercase; color: var(--val-text); margin-bottom: 5px; }
+    .modal-weapon { font-size: 1.2rem; color: var(--val-text-muted); margin-bottom: 2rem; }
+
+    .control-label { font-size: 1.2rem; font-weight: bold; margin-bottom: 10px; color: var(--val-text-muted); text-transform: uppercase;}
+    
+    .level-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 2rem; }
+    .level-btn { background: transparent; border: 1px solid var(--val-text-muted); color: var(--val-text); padding: 10px; text-align: left; font-family: var(--font-main); font-size: 1.1rem; cursor: pointer; transition: 0.2s; }
+    .level-btn:hover { border-color: var(--val-text); }
+    .level-btn.active { background: var(--val-text); color: var(--val-bg); border-color: var(--val-text); font-weight: bold; }
+
+    .chroma-list { display: flex; gap: 15px; flex-wrap: wrap; }
+    .chroma-btn { width: 50px; height: 50px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; transition: 0.2s; background-size: cover; background-position: center; }
+    .chroma-btn:hover { transform: scale(1.1); }
+    .chroma-btn.active { border-color: var(--val-red); box-shadow: 0 0 15px var(--val-red); }
+
+    /* ローディング */
+    .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--val-bg); z-index: 2000; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s; }
+    .spinner { width: 50px; height: 50px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--val-red); border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div class="loading-overlay" id="loading">
+    <div class="spinner"></div>
+    <h2 style="margin-top: 20px; letter-spacing: 2px;">LOADING ARMORY...</h2>
+  </div>
+
+  <header>
+    <div class="nav-links">
+      <button class="nav-btn active" onclick="switchView('store')">Store</button>
+      <button class="nav-btn" onclick="switchView('inventory')">Inventory</button>
+      <button class="nav-btn" onclick="switchView('manage')">Manage</button>
+    </div>
+    <div class="vp-display">
+      <div class="vp-icon"></div>
+      <span>∞</span>
+    </div>
+  </header>
+
+  <main>
+    <section id="store-view" class="view-section active">
+      <div class="section-header">
+        <h1 class="section-title">Daily Store</h1>
+        <div class="timer-container">
+          Refreshes in: <span id="countdown">--:--:--</span>
+          <button class="btn-debug" onclick="forceRollStore()" style="margin-left: 15px;">Force Reroll</button>
+        </div>
+      </div>
+      <div class="store-grid" id="store-grid"></div>
+    </section>
+
+    <section id="inventory-view" class="view-section">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">My Collection</h1>
+          <div style="font-size: 1.2rem; color: var(--val-text-muted);"><span id="inventory-count" style="color:var(--val-text); font-weight:bold;">0</span> Skins Owned</div>
+        </div>
+      </div>
+      <div class="inventory-grid" id="inventory-grid"></div>
+    </section>
+
+    <section id="manage-view" class="view-section">
+      <div class="section-header" style="align-items: center;">
+        <div>
+          <h1 class="section-title">Set Owned Skins</h1>
+          <div style="font-size: 1.2rem; color: var(--val-text-muted);">Check the skins you own to exclude them from the shop.</div>
+        </div>
+        <!-- 検索バー追加 -->
+        <div>
+          <input type="text" class="search-input" id="skin-search" placeholder="Search skin name..." oninput="renderManage(this.value)">
+        </div>
+      </div>
+      <div id="manage-list"></div>
+    </section>
+  </main>
+
+  <!-- スキン詳細モーダル -->
+  <div class="modal-overlay" id="skin-modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+      <div class="modal-body">
+        <div class="modal-media" id="modal-media"></div>
+        <div class="modal-sidebar">
+          <h2 class="modal-title" id="modal-title">Skin Name</h2>
+          <div class="modal-weapon" id="modal-weapon">Weapon Type</div>
+          
+          <div class="control-label">Levels / Animations</div>
+          <div class="level-list" id="modal-levels"></div>
+
+          <div class="control-label" style="margin-top: 1rem;">Variants</div>
+          <div class="chroma-list" id="modal-chromas"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const TIERS = {
+      "12683d76-48d7-84a3-4e09-6985794f0445": { name: "Select", price: 875, meleePrice: 1750, color: "#5a9fe2" },
+      "0cebb8be-46d7-c12a-d306-e9907afef163": { name: "Deluxe", price: 1275, meleePrice: 2550, color: "#009b8c" },
+      "60bca009-4182-7998-dee7-b8a2558ffa36": { name: "Premium", price: 1775, meleePrice: 3550, color: "#d1548d" },
+      "e046854e-406c-37f4-6607-19a9ba8426fc": { name: "Exclusive", price: 2175, meleePrice: 4350, color: "#f59a4f" },
+      "411e4a55-4e59-7757-41f0-84a527019f14": { name: "Ultra", price: 2475, meleePrice: 4950, color: "#f7ca67" }
+    };
+    const EXCLUDED_WORDS = ["champions", "チャンピオンズ", "lock//in", "ロックイン", "ミゼリコルディア", "arcane", "アーケイン", "ignite", "イグナイト", "vct", "standard"];
+
+    let allSkins = [];
+    let state = { inventory: [], currentStore: [], expireTime: 0 };
+    let currentModalSkin = null;
+    let activeLevelIndex = 0;
+    let activeChromaIndex = 0;
+
+    async function init() {
+      loadState();
+      await fetchWeaponsAndSkins();
+      
+      if (Date.now() > state.expireTime || state.currentStore.length === 0) rollStore();
+      else renderStore();
+
+      startCountdown();
+      document.getElementById('loading').style.opacity = '0';
+      setTimeout(() => document.getElementById('loading').style.display = 'none', 500);
+    }
+
+    async function fetchWeaponsAndSkins() {
+      try {
+        const res = await fetch("https://valorant-api.com/v1/weapons?language=ja-JP");
+        const json = await res.json();
+        
+        allSkins = [];
+        json.data.forEach(weapon => {
+          weapon.skins.forEach(skin => {
+            if (!skin.contentTierUuid) return;
+            const tierId = skin.contentTierUuid.toLowerCase();
+            if (!TIERS[tierId]) return;
+            
+            const nameLower = skin.displayName.toLowerCase();
+            for (let word of EXCLUDED_WORDS) {
+              if (nameLower.includes(word)) return;
+            }
+
+            let img = skin.displayIcon || (skin.levels.length > 0 ? skin.levels[0].displayIcon : null);
+            if (!img) return;
+
+            skin.cleanImage = img;
+            skin.weaponName = weapon.displayName;
+            skin.isMelee = weapon.displayName.includes("近接") || weapon.displayName.includes("Melee");
+            skin.displayPrice = skin.isMelee ? TIERS[tierId].meleePrice : TIERS[tierId].price;
+            skin.tierColor = TIERS[tierId].color;
+
+            allSkins.push(skin);
+          });
+        });
+      } catch (e) {
+        alert("データの取得に失敗しました。");
+      }
+    }
+
+    function loadState() {
+      const saved = localStorage.getItem("val_shop_state_v2");
+      if (saved) state = { ...state, ...JSON.parse(saved) };
+    }
+    function saveState() { localStorage.setItem("val_shop_state_v2", JSON.stringify(state)); }
+
+    function rollStore() {
+      const available = allSkins.filter(skin => !state.inventory.includes(skin.uuid));
+      if (available.length === 0) return alert("すべてのスキンを所有しています！");
+
+      const shuffled = available.sort(() => 0.5 - Math.random());
+      state.currentStore = shuffled.slice(0, 4).map(s => s.uuid);
+      state.expireTime = Date.now() + 24 * 60 * 60 * 1000;
+      
+      saveState();
+      renderStore();
+    }
+    function forceRollStore() { rollStore(); }
+
+    function renderStore() {
+      const grid = document.getElementById("store-grid");
+      grid.innerHTML = "";
+      state.currentStore.forEach(uuid => {
+        const skin = allSkins.find(s => s.uuid === uuid);
+        if(!skin) return;
+        const isOwned = state.inventory.includes(uuid);
+        const card = document.createElement("div");
+        card.className = "skin-card";
+        card.onclick = () => openModal(skin.uuid);
+        card.innerHTML = `
+          <div class="card-tier-line" style="background-color: ${skin.tierColor}"></div>
+          <div class="card-image-container"><img src="${skin.cleanImage}" alt="${skin.displayName}"></div>
+          <div class="card-info">
+            <div style="flex: 1; padding-right: 10px;">
+              <div class="skin-name">${skin.displayName}</div>
+              <div class="skin-price"><div class="vp-icon" style="width: 16px; height: 16px;"></div>${skin.displayPrice}</div>
+            </div>
+            ${isOwned 
+              ? `<button class="btn-buy owned" disabled onclick="event.stopPropagation()"><span>OWNED</span></button>` 
+              : `<button class="btn-buy" onclick="buySkin(event, '${skin.uuid}')"><span>BUY</span></button>`}
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function renderInventory() {
+      const grid = document.getElementById("inventory-grid");
+      grid.innerHTML = "";
+      document.getElementById("inventory-count").innerText = state.inventory.length;
+      const ownedSkins = allSkins.filter(s => state.inventory.includes(s.uuid));
+      if (ownedSkins.length === 0) return grid.innerHTML = "<p style='color: var(--val-text-muted);'>No skins owned yet.</p>";
+
+      ownedSkins.forEach(skin => {
+        const card = document.createElement("div");
+        card.className = "skin-card";
+        card.style.height = "250px";
+        card.onclick = () => openModal(skin.uuid);
+        card.innerHTML = `
+          <button class="btn-remove" onclick="removeSkin(event, '${skin.uuid}')">&times;</button>
+          <div class="card-tier-line" style="background-color: ${skin.tierColor}"></div>
+          <div class="card-image-container" style="height:150px;"><img src="${skin.cleanImage}" alt="${skin.displayName}"></div>
+          <div class="card-info" style="justify-content: center;"><div class="skin-name" style="text-align: center; font-size: 1rem;">${skin.displayName}</div></div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    /* ===== Manage画面 (検索 & アコーディオン対応) ===== */
+    function renderManage(searchQuery = "") {
+      const container = document.getElementById("manage-list");
+      container.innerHTML = "";
+
+      const query = searchQuery.toLowerCase().trim();
+      const grouped = {};
+      
+      // 検索にヒットするスキンだけを抽出
+      allSkins.forEach(skin => {
+        if (query && !skin.displayName.toLowerCase().includes(query)) return;
+        if (!grouped[skin.weaponName]) grouped[skin.weaponName] = [];
+        grouped[skin.weaponName].push(skin);
+      });
+
+      if (Object.keys(grouped).length === 0) {
+        container.innerHTML = `<p style="color: var(--val-text-muted); font-size: 1.2rem;">No skins found for "${searchQuery}"</p>`;
+        return;
+      }
+
+      // カテゴリごとにHTML生成
+      for (const [weapon, skins] of Object.entries(grouped)) {
+        const section = document.createElement("div");
+        section.className = "category-section";
+        
+        // 検索中(query有)の場合は最初から開く(open), 通常時は閉じておく
+        const isOpen = query ? "open" : "";
+        const icon = query ? "▼" : "▶";
+
+        let html = `
+          <div class="category-header" onclick="toggleCategory(this)">
+            <h2 class="category-title">${weapon}</h2>
+            <span class="toggle-icon">${icon}</span>
+          </div>
+          <div class="category-grid ${isOpen}">
+        `;
+        
+        skins.forEach(skin => {
+          const isOwned = state.inventory.includes(skin.uuid);
+          html += `
+            <label class="manage-item">
+              <input type="checkbox" onchange="toggleOwnership('${skin.uuid}', this.checked)" ${isOwned ? 'checked' : ''}>
+              <img src="${skin.cleanImage}" alt="icon">
+              <span style="font-weight: 600; font-size: 1rem;">${skin.displayName}</span>
+            </label>
+          `;
+        });
+        
+        html += `</div>`;
+        section.innerHTML = html;
+        container.appendChild(section);
+      }
+    }
+
+    // アコーディオンの開閉処理
+    function toggleCategory(headerEl) {
+      const grid = headerEl.nextElementSibling;
+      const icon = headerEl.querySelector(".toggle-icon");
+      grid.classList.toggle("open");
+      icon.innerText = grid.classList.contains("open") ? "▼" : "▶";
+    }
+
+    function buySkin(event, uuid) {
+      event.stopPropagation();
+      if (!state.inventory.includes(uuid)) {
+        state.inventory.push(uuid);
+        saveState();
+        renderStore();
+      }
+    }
+
+    function removeSkin(event, uuid) {
+      event.stopPropagation();
+      state.inventory = state.inventory.filter(id => id !== uuid);
+      saveState();
+      renderInventory();
+    }
+
+    function toggleOwnership(uuid, isChecked) {
+      if (isChecked && !state.inventory.includes(uuid)) state.inventory.push(uuid);
+      else if (!isChecked) state.inventory = state.inventory.filter(id => id !== uuid);
+      saveState();
+      if(document.getElementById('store-view').classList.contains('active')) renderStore();
+      if(document.getElementById('inventory-view').classList.contains('active')) renderInventory();
+    }
+
+    /* ===== モーダル関連 ===== */
+    function openModal(uuid) {
+      currentModalSkin = allSkins.find(s => s.uuid === uuid);
+      if (!currentModalSkin) return;
+      activeLevelIndex = currentModalSkin.levels.length - 1; 
+      activeChromaIndex = 0;
+      document.getElementById("modal-title").innerText = currentModalSkin.displayName;
+      document.getElementById("modal-weapon").innerText = currentModalSkin.weaponName;
+      renderModalControls();
+      renderModalMedia();
+      document.getElementById("skin-modal").classList.add("active");
+    }
+
+    function closeModal() {
+      document.getElementById("skin-modal").classList.remove("active");
+      document.getElementById("modal-media").innerHTML = ""; 
+    }
+
+    function renderModalControls() {
+      const lvContainer = document.getElementById("modal-levels");
+      const crContainer = document.getElementById("modal-chromas");
+      lvContainer.innerHTML = "";
+      crContainer.innerHTML = "";
+
+      currentModalSkin.levels.forEach((level, idx) => {
+        let levelName = level.levelItem ? level.levelItem.split("::").pop() : `Level ${idx + 1}`;
+        const btn = document.createElement("button");
+        btn.className = `level-btn ${idx === activeLevelIndex ? 'active' : ''}`;
+        btn.innerText = `${idx + 1}. ${levelName}`;
+        btn.onclick = () => {
+          activeLevelIndex = idx;
+          activeChromaIndex = 0; 
+          renderModalControls();
+          renderModalMedia();
+        };
+        lvContainer.appendChild(btn);
+      });
+
+      if (currentModalSkin.chromas && currentModalSkin.chromas.length > 1) {
+        currentModalSkin.chromas.forEach((chroma, idx) => {
+          const btn = document.createElement("button");
+          btn.className = `chroma-btn ${idx === activeChromaIndex ? 'active' : ''}`;
+          if (chroma.swatch) btn.style.backgroundImage = `url('${chroma.swatch}')`;
+          else btn.style.backgroundColor = "#555";
+          
+          btn.onclick = () => {
+            activeChromaIndex = idx;
+            activeLevelIndex = currentModalSkin.levels.length - 1;
+            renderModalControls();
+            renderModalMedia();
+          };
+          crContainer.appendChild(btn);
+        });
+      } else {
+        crContainer.innerHTML = "<span style='color:#888;'>No variants</span>";
+      }
+    }
+
+    function renderModalMedia() {
+      const container = document.getElementById("modal-media");
+      const level = currentModalSkin.levels[activeLevelIndex];
+      const chroma = currentModalSkin.chromas[activeChromaIndex];
+      let videoUrl = null;
+      let imageUrl = currentModalSkin.cleanImage; 
+
+      if (activeChromaIndex > 0 && chroma && chroma.streamedVideo) videoUrl = chroma.streamedVideo;
+      else if (level && level.streamedVideo) videoUrl = level.streamedVideo;
+
+      if (!videoUrl) {
+        if (activeChromaIndex > 0 && chroma) imageUrl = chroma.displayIcon || chroma.fullRender || imageUrl;
+        else if (level && level.displayIcon) imageUrl = level.displayIcon;
+      }
+
+      if (videoUrl) container.innerHTML = `<video src="${videoUrl}" autoplay loop controls style="max-width:100%; max-height:100%;"></video>`;
+      else container.innerHTML = `<img src="${imageUrl}" alt="Preview" style="max-width:100%; max-height:100%; object-fit:contain;">`;
+    }
+
+    function startCountdown() {
+      setInterval(() => {
+        const diff = state.expireTime - Date.now();
+        if (diff <= 0) return rollStore();
+        const h = Math.floor((diff / (1000 * 60 * 60)) % 24).toString().padStart(2, '0');
+        const m = Math.floor((diff / (1000 * 60)) % 60).toString().padStart(2, '0');
+        const s = Math.floor((diff / 1000) % 60).toString().padStart(2, '0');
+        document.getElementById("countdown").innerText = `${h}:${m}:${s}`;
+      }, 1000);
+    }
+
+    function switchView(viewId) {
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.innerText.toLowerCase() === viewId.toLowerCase()) btn.classList.add('active');
+      });
+      document.querySelectorAll('.view-section').forEach(sec => sec.classList.remove('active'));
+      document.getElementById(`${viewId}-view`).classList.add('active');
+      
+      if (viewId === 'inventory') renderInventory();
+      // Manageタブを開いた時に再描画（検索ワードはクリア）
+      if (viewId === 'manage') {
+        document.getElementById("skin-search").value = "";
+        renderManage("");
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
