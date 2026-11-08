@@ -4,20 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f7f8f5">
-  <meta name="description" content="スマホ1台でみんなのポーカーチップを管理。ベットや手番をやさしく案内し、集計・配分・途中保存まで自動で行います。">
+  <meta name="description" content="スマホ1台で全員のテキサスホールデムのチップを管理。持ち点とアクションを1画面に表示し、相手への影響も確認できます。">
   <title>ポーカーチップ</title>
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css">
-  <script type="module" src="./app.mjs"></script>
+  <link rel="stylesheet" href="./style.css?v=2">
+  <script type="module" src="./app.mjs?v=2"></script>
 </head>
 <body>
   <header class="site-header">
     <a class="brand" href="./" aria-label="ポーカーチップ ホーム">ポーカーチップ</a>
-    <button type="button" class="text-button" id="help-button">使い方</button>
+    <nav class="header-tools" aria-label="サイトメニュー"><button type="button" class="text-button" id="settings-button">設定</button><button type="button" class="text-button" id="help-button">使い方</button></nav>
   </header>
   <main id="app"><p class="loading">読み込み中…</p></main>
   <noscript><p class="notice">このサイトを使うには、ブラウザのJavaScriptを有効にしてください。</p></noscript>
   <div id="message" role="status" aria-live="polite" class="toast" hidden></div>
   <dialog id="modal" aria-labelledby="modal-title"><div id="modal-content"></div></dialog>
+  <div id="chip-effects" aria-hidden="true"></div>
+  <button type="button" id="handoff" class="handoff" hidden></button>
 </body>
 </html>

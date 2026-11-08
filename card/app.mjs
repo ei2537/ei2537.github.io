@@ -1,14 +1,18 @@
-import { VERSION, createGame, transition, actionOptions, potTotal, pots, rounds, validateGame } from './engine.mjs';
+import { VERSION, createGame, transition, actionOptions, potTotal, pots, validateGame } from './engine.mjs';
+import { migrateToHoldem, actionPreview, chipColumns } from './presentation.mjs';
 
-const KEY = 'poker-chips:v1';
-const DRAFT_KEY = `${KEY}:setup`;
-const app = document.querySelector('#app');
-const modal = document.querySelector('#modal');
+const KEY = 'poker-chips:v1', DRAFT_KEY = `${KEY}:setup`, PREF_KEY = `${KEY}:preferences`;
+const app = document.querySelector('#app'), modal = document.querySelector('#modal');
+const overlay = document.querySelector('#handoff'), effects = document.querySelector('#chip-effects');
 const escape = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const number = value => value.toLocaleString('ja-JP');
 const signed = value => `${value > 0 ? '+' : ''}${number(value)}`;
-let game = null, history = [], revision = null, storageAvailable = true, corruptSave = false, toastTimer;
-let draft = {names:['','','',''],mode:'draw',starting:1000,ante:10,minBet:10,sb:10,bb:20};
+const streets = ['プリフロップ','フロップ','ターン','リバー'];
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+let game = null, history = [], revision = null, storageAvailable = true, corruptSave = false, migrated = false;
+let toastTimer, busy = false, effectEpoch = 0, finishHandoff = null;
+let preferences = { showInfo:true };
+let draft = {names:['','','',''],mode:'holdem',starting:1000,sb:10,bb:20};
 
 function readSave() {
   const raw = localStorage.getItem(KEY);
@@ -16,276 +20,338 @@ function readSave() {
   const saved = JSON.parse(raw);
   if (saved.version !== VERSION || typeof saved.revision !== 'string' || !Array.isArray(saved.history)) throw new Error('保存形式が異なります。');
   validateGame(saved.game);
-  saved.history = saved.history.slice(-60).filter(state => {try {return validateGame(state);} catch {return false;}});
+  const wasDraw = saved.game.config.mode !== 'holdem';
+  saved.game = migrateToHoldem(saved.game);
+  saved.history = wasDraw ? [] : saved.history.slice(-60).filter(state => {try {return state.config.mode === 'holdem' && validateGame(state);} catch {return false;}});
+  saved.migrated = wasDraw;
   return saved;
 }
 try {
   const setup = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
-  if (setup && Array.isArray(setup.names) && setup.names.length >= 2 && setup.names.length <= 10) draft = {...draft,...setup};
+  if (setup && Array.isArray(setup.names) && setup.names.length >= 2 && setup.names.length <= 10) draft = {...draft,...setup,mode:'holdem'};
+  const prefs = JSON.parse(localStorage.getItem(PREF_KEY) || 'null');
+  if (typeof prefs?.showInfo === 'boolean') preferences.showInfo = prefs.showInfo;
   const saved = readSave();
-  if (saved) { game = saved.game; history = saved.history; revision = saved.revision; }
-} catch { corruptSave = true; }
-try { localStorage.setItem(`${KEY}:test`, '1'); localStorage.removeItem(`${KEY}:test`); } catch { storageAvailable = false; }
+  if (saved) {game = saved.game; history = saved.history; revision = saved.revision; migrated = saved.migrated;}
+} catch {corruptSave = true;}
+try {localStorage.setItem(`${KEY}:test`,'1');localStorage.removeItem(`${KEY}:test`);} catch {storageAvailable = false;}
 
 function toast(message) {
   const target = document.querySelector('#message');
   clearTimeout(toastTimer); target.textContent = message; target.hidden = false;
-  toastTimer = setTimeout(() => {target.hidden = true;}, 4500);
+  toastTimer = setTimeout(() => {target.hidden = true;}, 3800);
 }
-
-function saveDraft() { try {localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));} catch {storageAvailable = false;} }
+function saveDraft() {try {localStorage.setItem(DRAFT_KEY,JSON.stringify(draft));} catch {storageAvailable = false;}}
 function persist() {
   revision = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  try {localStorage.setItem(KEY, JSON.stringify({version:VERSION, revision, game, history}));}
-  catch {storageAvailable = false; toast('このブラウザでは途中保存ができません。ページを閉じずに使ってください。');}
+  try {localStorage.setItem(KEY,JSON.stringify({version:VERSION,revision,game,history}));}
+  catch {storageAvailable = false;toast('途中保存ができません。ページを閉じずに使ってください。');}
+}
+function setBusy(value) {busy = value;app.inert = value;document.querySelector('.site-header').inert = value;}
+function cancelEffects() {
+  effectEpoch++; if (finishHandoff) finishHandoff();
+  overlay.hidden = true; overlay.classList.remove('running'); effects.replaceChildren(); setBusy(false);
 }
 function syncBeforeChange() {
   if (!storageAvailable) return true;
   try {
     const saved = readSave();
     if ((saved?.revision || null) !== revision) {
-      game = saved?.game || null; history = saved?.history || []; revision = saved?.revision || null;
-      modal.close(); render(); toast('別のタブで更新されたので、最新の状態に切り替えました。もう一度操作してください。');
-      return false;
+      cancelEffects(); game = saved?.game || null; history = saved?.history || []; revision = saved?.revision || null;
+      modal.close(); render();toast('別のタブの最新状態を読み込みました。もう一度操作してください。');return false;
     }
-  } catch { /* A known damaged save can be replaced by a new game. */ }
+  } catch { /* A damaged save can be replaced by a new game. */ }
   return true;
 }
-function change(action) {
-  if (!syncBeforeChange()) return false;
+async function change(action, origin) {
+  if (busy || !syncBeforeChange()) return false;
   try {
-    const next = transition(game, action);
-    history.push(game); history = history.slice(-60); game = next;
-    persist(); render(true); return true;
-  } catch (error) {toast(error.message); return false;}
+    const before = game, next = transition(game,action);
+    history.push(game);history = history.slice(-60);game = next;persist();
+    const token = ++effectEpoch;
+    const delta = potTotal(next) - potTotal(before);
+    const pass = next.phase === 'betting' && (before.phase !== 'betting' || before.actor !== next.actor);
+    const depositing = delta > 0 && before.phase !== 'ready' && !['rebuy','settle'].includes(action.type);
+    if (depositing && before.phase === 'betting') {
+      // Let the acting player see their chips leave before passing the screen.
+      const player = next.players[before.actor];
+      const stack = document.querySelector('#player-stack');
+      if (stack) stack.innerHTML = `${number(player.stack)}<small> 枚</small>`;
+      const committed = document.querySelector('.turn-committed');
+      if (committed) committed.textContent = `このラウンド ${number(player.bet)}枚 · このハンド ${number(player.committed)}枚`;
+      const art = document.querySelector('.pot-art');
+      if (art) art.outerHTML = chipArt(potTotal(next));
+    } else render();
+    if (depositing) {setBusy(true);await collectChips(potTotal(before),potTotal(next),origin,token);}
+    if (token !== effectEpoch || game !== next) return true;
+    if (depositing) render();
+    if (pass) await handoff(next.players[next.actor],token);
+    if (token === effectEpoch) {setBusy(false);focusPhase();}
+    return true;
+  } catch(error) {cancelEffects();render();toast(error.message);return false;}
 }
 function undo() {
-  if (!history.length || !syncBeforeChange()) return;
-  game = history.pop(); persist(); render(true); toast('ひとつ前に戻しました。');
+  if (busy || !history.length || !syncBeforeChange()) return;
+  cancelEffects();game = history.pop();persist();render();focusPhase();toast('1アクション戻しました。');
 }
-window.addEventListener('storage', event => {
+window.addEventListener('storage',event => {
+  if (event.key === PREF_KEY) {
+    try {const p = JSON.parse(event.newValue || '{}');preferences.showInfo = p.showInfo !== false;render();} catch {}
+    return;
+  }
   if (event.key !== KEY) return;
   try {
-    const saved = readSave(); game = saved?.game || null; history = saved?.history || []; revision = saved?.revision || null;
-    modal.close(); render(); toast('別のタブの変更を反映しました。');
-  } catch {toast('別のタブの保存データを読み込めませんでした。');}
+    const saved = readSave();cancelEffects();game = saved?.game || null;history = saved?.history || [];revision = saved?.revision || null;
+    modal.close();render();toast('別のタブの変更を反映しました。');
+  } catch {toast('別のタブの記録を読み込めませんでした。');}
 });
+document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelEffects();render();}});
 
-function storageNotice() {
-  return !storageAvailable ? '<p class="storage-error">途中保存を使えないブラウザです。このページを閉じると記録が消えます。</p>' : '';
+async function collectChips(from,to,origin,token) {
+  const amount = document.querySelector('#pot-amount'), art = document.querySelector('.pot-art');
+  if (!amount || reducedMotion.matches) return;
+  const bounds = amount.getBoundingClientRect();
+  const target = {x:bounds.left+bounds.width/2,y:bounds.top+bounds.height/2};
+  const start = origin ? {x:origin.left+origin.width/2,y:origin.top+origin.height/2} : {x:window.innerWidth/2,y:window.innerHeight*.76};
+  const duration = 360, started = performance.now();
+  amount.textContent = number(from);art?.classList.add('collecting');
+  const flights = Array.from({length:4},(_,i)=>{
+    const chip = document.createElement('span');chip.className = 'flying-chip';effects.append(chip);
+    const animation = chip.animate([
+      {transform:`translate(${start.x+i*5-18}px,${start.y+i*3-12}px) scale(.9)`,opacity:0},
+      {offset:.15,opacity:1},
+      {transform:`translate(${target.x-12+i*3}px,${target.y-12}px) scale(.55)`,opacity:0}
+    ],{duration:duration+i*24,easing:'cubic-bezier(.2,.7,.3,1)',fill:'forwards'});
+    return animation.finished.catch(()=>{}).then(()=>chip.remove());
+  });
+  await new Promise(resolve=>{
+    function tick(now) {
+      if(token!==effectEpoch){resolve();return;}
+      const progress = Math.min(1,(now-started)/duration);
+      amount.textContent = number(Math.round(from+(to-from)*(1-(1-progress)**3)));
+      if(progress<1)requestAnimationFrame(tick);else resolve();
+    }
+    requestAnimationFrame(tick);
+  });
+  await Promise.all(flights);art?.classList.remove('collecting');
 }
-function render(focus = false) {
-  app.innerHTML = storageNotice() + (game ? gameView() : setupView());
-  if (focus) {
-    const target = document.querySelector('#turn-title, #phase-title');
-    if (target) {target.focus({preventScroll:true}); target.scrollIntoView({block:'nearest',behavior:'instant'});}
-  }
+function handoff(player,token) {
+  if(token!==effectEpoch)return Promise.resolve();
+  setBusy(true);
+  overlay.innerHTML = `<span class="handoff-caption">次のプレイヤー</span><strong>${escape(player.name)}</strong><span class="handoff-stack">持ち点 <b>${number(player.stack)}</b> 枚</span><span class="handoff-skip">タップでスキップ</span>`;
+  overlay.setAttribute('aria-label',`次は${player.name}さん。持ち点${number(player.stack)}枚。タップでスキップ`);
+  overlay.dataset.lastPlayer = player.name;overlay.dataset.state = 'active';overlay.hidden = false;
+  overlay.classList.remove('running');void overlay.offsetWidth;overlay.classList.add('running');overlay.focus({preventScroll:true});
+  return new Promise(resolve=>{
+    const done=()=>{clearTimeout(timer);overlay.hidden=true;overlay.classList.remove('running');overlay.dataset.state='complete';finishHandoff=null;overlay.onclick=null;resolve();};
+    const timer=setTimeout(done,reducedMotion.matches?350:820);finishHandoff=done;overlay.onclick=done;
+  });
+}
+function focusPhase() {document.querySelector('#turn-title,#phase-title')?.focus({preventScroll:true});}
+function render() {
+  document.body.classList.toggle('is-playing',!!game);
+  document.body.dataset.phase = game?.phase || 'setup';
+  app.className = game ? 'playing-app' : 'setup-app';
+  app.innerHTML = game ? gameView() : setupView();
+}
+function infoButton(kind,label) {
+  return preferences.showInfo ? `<button type="button" class="info-button" data-info="${kind}" aria-label="${label}の説明"><span aria-hidden="true">i</span></button>` : '';
+}
+function choice(kind,title,detail,primary=false,disabled=false) {
+  return `<div class="action-choice ${primary?'primary-choice':''} ${preferences.showInfo?'has-info':''}"><button type="button" class="choice-button" data-do="${kind}" ${disabled?'disabled':''}><strong>${title}</strong><small>${detail}</small></button>${infoButton(kind,kind==='call'?(actionOptions(game).due===0?'チェック':'コール'):kind==='fold'?'フォールド':'オールイン')}</div>`;
 }
 
 function setupView() {
-  const max = draft.mode === 'draw' ? 6 : 10;
-  return `<div class="intro"><h1>チップを用意しよう。</h1><p>トランプは手元に。全員のチップは、この1台で。</p></div>
-  ${corruptSave ? '<p class="storage-error">前回の記録を読み込めませんでした。新しいゲームを始めると保存し直します。</p>' : ''}
-  <form id="setup-form"><div class="setup-grid">
-    <section class="panel" aria-labelledby="players-title">
-      <div class="section-title"><h2 id="players-title">参加する人</h2><p>${draft.names.length}人</p></div>
-      <p class="help-text" style="margin:-10px 0 18px">テーブルに座る順番で入れてください。上から時計回りに進みます。</p>
-      <div class="player-inputs">${draft.names.map((name,i) => `<div class="player-input"><label class="seat" for="name-${i}">${String(i+1).padStart(2,'0')}</label><input id="name-${i}" data-name="${i}" aria-label="${i+1}人目の名前" value="${escape(name)}" placeholder="プレイヤー${i+1}" maxlength="20" autocomplete="off"><button type="button" class="remove-player" data-remove="${i}" aria-label="${i+1}人目を外す" ${draft.names.length <= 2 ? 'disabled' : ''}>×</button></div>`).join('')}</div>
-      <button type="button" class="add-player" data-do="add-player" ${draft.names.length >= max ? 'disabled' : ''}>＋ 人を追加</button><p class="help-text">${draft.mode === 'draw' ? '2〜6人で遊べます。' : '2〜10人で遊べます。'} 名前は空欄のままでもOK。</p>
-      <div class="how-start"><h3>始め方は、これだけ。</h3><ol><li>名前とルールを決める</li><li>画面の案内に沿ってカードを配る</li><li>順番に「出す」「降りる」を選ぶ</li></ol></div>
-    </section>
-    <div class="setup-right"><section class="panel" aria-labelledby="rule-title"><div class="section-title"><h2 id="rule-title">遊ぶルール</h2></div>
-      <div class="mode-switch"><button type="button" data-mode="draw" aria-pressed="${draft.mode === 'draw'}">5枚ポーカー<span>手札を1回交換する</span></button><button type="button" data-mode="holdem" aria-pressed="${draft.mode === 'holdem'}">ホールデム<span>共有カードで遊ぶ</span></button></div>
-      <label class="field"><span>最初に配るチップ</span><span class="input-unit"><input name="starting" type="number" inputmode="numeric" min="1" max="1000000" step="1" required value="${escape(draft.starting)}"><span>枚 / 人</span></span></label>
-      ${draft.mode === 'draw' ? `<div class="fields-two"><label class="field"><span>毎回の参加料</span><span class="input-unit"><input name="ante" type="number" inputmode="numeric" min="1" max="1000000" step="1" required value="${escape(draft.ante)}"><span>枚</span></span></label><label class="field"><span>最小のベット</span><span class="input-unit"><input name="minBet" type="number" inputmode="numeric" min="1" max="1000000" step="1" required value="${escape(draft.minBet)}"><span>枚</span></span></label></div><p class="help-text">参加料は勝負の最初に全員から自動で集めます。迷ったら、このままで。</p>` : `<div class="fields-two"><label class="field"><span>小ブラインド</span><span class="input-unit"><input name="sb" type="number" inputmode="numeric" min="1" max="999999" step="1" required value="${escape(draft.sb)}"><span>枚</span></span></label><label class="field"><span>大ブラインド</span><span class="input-unit"><input name="bb" type="number" inputmode="numeric" min="2" max="1000000" step="1" required value="${escape(draft.bb)}"><span>枚</span></span></label></div><p class="help-text">2人が先に出すチップです。担当は勝負ごとに自動で交代します。</p>`}
-      <p id="setup-error" class="error" role="alert" hidden></p>
-      <div class="start-area"><button class="primary wide" type="submit">このメンバーで始める</button><p class="save-note">途中の記録は、このブラウザに自動保存されます。</p></div>
-    </section></div>
-  </div></form><p class="footer-note">チップは点数として使います。登録・ダウンロードは不要です。</p>`;
+  return `<div class="intro"><p class="eyebrow">NO LIMIT TEXAS HOLD’EM</p><h1>ポーカーチップ</h1><p>トランプは手元に。全員のチップは、この1台で。</p></div>
+  ${!storageAvailable?'<p class="storage-error">途中保存を使えません。プレイ中はページを閉じずに使ってください。</p>':''}
+  ${corruptSave?'<p class="storage-error">前回の記録を読み込めませんでした。新しいゲームを始めると保存し直します。</p>':''}
+  <form id="setup-form"><div class="setup-grid"><section class="panel"><div class="section-title"><h2>プレイヤー</h2><span>${draft.names.length}人</span></div><p class="help-text">席順に、上から時計回りで入力してください。</p><div class="player-inputs">${draft.names.map((name,i)=>`<div class="player-input"><label for="name-${i}">${String(i+1).padStart(2,'0')}</label><input id="name-${i}" data-name="${i}" aria-label="${i+1}人目の名前" value="${escape(name)}" placeholder="プレイヤー${i+1}" maxlength="20" autocomplete="off"><button type="button" class="remove-player" data-remove="${i}" aria-label="${i+1}人目を外す" ${draft.names.length<=2?'disabled':''}>×</button></div>`).join('')}</div><button type="button" class="add-player wide" data-do="add-player" ${draft.names.length>=10?'disabled':''}>＋ プレイヤーを追加</button><p class="help-text">2〜10人。空欄なら「プレイヤー1」のように表示します。</p></section>
+  <section class="panel"><div class="section-title"><h2>テーブル設定</h2><span>テキサスホールデム</span></div><label class="field"><span>スタートチップ</span><span class="input-unit"><input name="starting" type="number" inputmode="numeric" min="2" max="1000000" step="1" required value="${escape(draft.starting)}"><span>枚 / 人</span></span></label><div class="fields-two"><label class="field"><span>スモールブラインド</span><span class="input-unit"><input name="sb" type="number" inputmode="numeric" min="1" max="999999" step="1" required value="${escape(draft.sb)}"><span>枚</span></span></label><label class="field"><span>ビッグブラインド</span><span class="input-unit"><input name="bb" type="number" inputmode="numeric" min="2" max="1000000" step="1" required value="${escape(draft.bb)}"><span>枚</span></span></label></div><p class="help-text">ブラインドは自動で支払い、ハンドごとに交代します。</p><p id="setup-error" class="error" role="alert" hidden></p><button class="primary wide start-button" type="submit">テーブルを作る</button><p class="save-note">このブラウザに自動保存されます。</p></section></div></form><p class="footer-note">カードと勝敗は手元で確認。チップは点数として使います。</p>`;
 }
-
 function stageTrack() {
-  if (game.phase === 'ready') return '';
-  const names = game.config.mode === 'draw' ? ['交換前','交換後','結果'] : ['配札後','3枚公開','4枚目','5枚目','結果'];
-  const current = ['showdown','complete'].includes(game.phase) ? names.length - 1 : game.round;
-  return `<ol class="stage-track" aria-label="勝負の進み具合">${names.map((name,i)=>`<li class="${i === current ? 'current' : i < current ? 'done' : ''}" ${i===current?'aria-current="step"':''}>${name}</li>`).join('')}</ol>`;
+  const result=['showdown','complete'].includes(game.phase);
+  return `<ol class="street-track" aria-label="ベッティングラウンド">${[...streets,'結果'].map((name,i)=>`<li class="${(result?i===4:i===game.round)?'current':''}" ${(result?i===4:i===game.round)?'aria-current="step"':''}>${name}</li>`).join('')}</ol>`;
 }
-function potBar() {
-  if (game.phase === 'ready') return '';
-  return `<div class="pot-bar"><div><p class="eyebrow">${game.phase === 'complete' ? '配分したチップ' : '場に集まったチップ'}</p><p class="pot-number">${number(game.phase === 'complete' ? game.result.total : potTotal(game))}<span>枚</span></p></div><div class="pot-side">${game.phase === 'betting' ? `この周の基準<br><strong>${number(game.currentBet)}</strong> 枚` : `1人の持ち点<br>最初は ${number(game.config.starting)} 枚`}</div></div>`;
+function chipArt(amount) {
+  return `<div class="pot-art" aria-hidden="true">${chipColumns(amount).map((col,i)=>`<div class="chip-column shade-${i}">${Array.from({length:col.visible},(_,j)=>`<span class="pot-chip" style="--level:${j}">${j===col.visible-1?col.value:''}</span>`).join('')}</div>`).join('')}</div>`;
 }
-function tableView() {
-  return `<section class="panel table-panel" aria-labelledby="table-title"><div class="table-heading"><h2 id="table-title">みんなのチップ</h2><span>席順・時計回り</span></div><table class="players-table"><thead><tr><th scope="col">名前</th><th scope="col">持ち点</th><th scope="col">この勝負</th></tr></thead><tbody>${game.players.map((p,i) => {
-    let status = p.lastAction;
-    if (game.phase === 'ready') status = '準備OK';
-    else if (!p.inHand) status = 'お休み';
-    else if (game.phase === 'complete') status = `${signed(game.result.changes.find(change=>change.id===p.id)?.amount || 0)}枚`;
-    else if (p.folded) status = 'この勝負は降りた';
-    else if (p.stack === 0) status = '全額を出して待機中';
-    if (game.actor === i) status = 'いまの手番';
-    const badge = game.hand > 0 && game.dealer === i ? '<span class="badge">配る人</span>' : '';
-    return `<tr class="${game.actor===i?'active':''} ${p.folded||(!p.inHand&&game.phase!=='ready')?'out':''}"><td><div class="player-name">${escape(p.name)}${badge}</div><div class="player-state">${escape(status)}</div></td><td><div class="player-stack">${number(p.stack)}</div></td><td><div class="player-bet">${game.phase === 'complete' ? '—' : number(p.committed)}</div></td></tr>`;
-  }).join('')}</tbody></table><p class="table-footer">「この勝負」は、参加料も含めて出した合計です。</p></section>`;
+function potView() {
+  const total=game.phase==='complete'?game.result.total:potTotal(game);
+  return `<div class="pot-area"><div><p class="eyebrow">${game.phase==='complete'?'獲得ポット':'POT'}</p><p class="pot-number"><strong id="pot-amount">${number(total)}</strong><span>枚</span></p></div>${chipArt(total)}<div class="pot-bet"><span>現在のベット</span><strong>${number(game.currentBet)}<small> 枚</small></strong></div></div>`;
 }
 function gameView() {
-  return `<div class="game-top"><div><h1>${game.hand ? `第${game.hand}ゲーム` : '準備ができました'}</h1><p class="game-meta">${game.config.mode==='draw'?`5枚ポーカー · 参加料 ${number(game.config.ante)}枚`:`ホールデム · ${number(game.config.sb)} / ${number(game.config.bb)}`} · ${game.players.length}人</p></div><div class="game-tools"><button type="button" class="text-button" data-do="undo" ${history.length?'':'disabled'}>1つ戻す</button><button type="button" class="text-button" data-do="menu">メニュー</button></div></div>
-  ${stageTrack()}<div class="game-grid"><div><section class="panel" aria-label="ゲームの操作">${potBar()}${phaseView()}</section><p class="inline-tip">${contextTip()}</p></div><div class="game-side">${tableView()}${game.log.length ? `<details class="below-panel"><summary>この勝負の記録</summary><ol class="log">${game.log.map(message=>`<li>${escape(message)}</li>`).join('')}</ol></details>` : ''}</div></div><p class="footer-note">${storageAvailable?'自動保存中 · ページを閉じても、このブラウザで続きから。':'このページを閉じずに使ってください。'}</p>`;
+  return `<div class="game-shell"><div class="game-bar"><div><h1>${game.hand?`ハンド ${game.hand}`:'テーブル準備'}</h1><span>BLINDS ${number(game.config.sb)} / ${number(game.config.bb)}</span></div><div class="game-tools"><button type="button" class="text-button" data-do="undo" ${history.length?'':'disabled'}>1つ戻す</button><button type="button" class="text-button" data-do="menu">メニュー</button></div></div>${stageTrack()}<div class="play-layout"><section class="play-panel" aria-label="ゲームの操作">${potView()}<div class="phase-content ${game.phase==='betting'?'betting-content':''}">${phaseView()}</div></section><aside class="desktop-table">${tableView()}</aside></div><div class="game-footer"><button type="button" data-do="players">全員のチップ</button><span class="save-indicator ${storageAvailable?'':'unsaved'}">${storageAvailable?'保存済み':'保存できません'}</span><button type="button" data-do="log">アクション履歴</button></div></div>`;
+}
+function tableView() {
+  return `<div class="table-wrap"><h2>全員のチップ</h2><table class="players-table"><thead><tr><th scope="col">プレイヤー</th><th scope="col">残り</th><th scope="col">投入済み</th></tr></thead><tbody>${game.players.map((p,i)=>{
+    let status=game.phase==='ready'?'準備OK':!p.inHand?'シットアウト':p.folded?'フォールド':p.stack===0&&game.phase!=='complete'?'オールイン':p.lastAction;
+    if(game.phase==='complete')status=`${signed(game.result.changes.find(c=>c.id===i)?.amount||0)}枚`;
+    if(game.actor===i)status='現在のプレイヤー';
+    const badges=game.hand>0?`${game.dealer===i?'<b class="badge">D</b>':''}${game.sb===i?'<b class="badge">SB</b>':''}${game.bb===i?'<b class="badge">BB</b>':''}`:'';
+    return `<tr class="${game.actor===i?'active':''} ${p.folded?'folded':''}"><td><div class="player-name">${escape(p.name)} ${badges}</div><small>${escape(status||'待機中')}</small></td><td>${number(p.stack)}</td><td>${game.phase==='complete'?'—':number(p.committed)}</td></tr>`;
+  }).join('')}</tbody></table><p class="help-text">D：ディーラー / SB・BB：ブラインド<br>投入済みは、このハンド全体の合計です。</p></div>`;
 }
 function phaseView() {
-  if (game.phase === 'ready') return `<h2 id="phase-title" class="phase-heading" tabindex="-1">まずはカードを用意。</h2><p class="instruction">${escape(game.players[game.dealer].name)}さんから、配る役を始めます。席順に時計回りで進めてください。</p><button type="button" class="primary wide next-button" data-do="start">最初の勝負を始める</button>`;
-  if (game.phase === 'deal') {
-    const message = game.config.mode === 'draw' ? '全員にカードを5枚ずつ、裏向きで配ってください。配り終えたら、自分の手札を確認しましょう。' : '全員にカードを2枚ずつ、裏向きで配ってください。真ん中の共有カードは、まだ出しません。';
-    return `<p class="eyebrow">配る人：${escape(game.players[game.dealer].name)}さん</p><h2 id="phase-title" class="phase-heading" tabindex="-1">カードを配ってください。</h2><p class="instruction">${message}</p><p class="deal-note">${game.config.mode==='draw'?`全員の参加料 ${number(game.config.ante)}枚は集計済みです。`:`${escape(game.players[game.sb].name)}さんの小ブラインドと、${escape(game.players[game.bb].name)}さんの大ブラインドは集計済みです。`}</p><button type="button" class="primary wide next-button" data-do="advance">配り終えた · ベットへ</button>`;
+  if(game.phase==='betting')return bettingView();
+  if(game.phase==='ready')return `<div class="phase-copy"><p class="eyebrow">READY</p><h2 id="phase-title" tabindex="-1">テーブルの準備ができました。</h2><p>最初のディーラーは${escape(game.players[game.dealer].name)}さん。画面に沿って、時計回りに進めます。</p></div><button type="button" class="primary wide phase-next" data-do="start">最初のハンドへ</button>`;
+  if(game.phase==='deal')return `<div class="phase-copy"><p class="eyebrow">ディーラー：${escape(game.players[game.dealer].name)}</p><h2 id="phase-title" tabindex="-1">ホールカードを2枚ずつ。</h2><p>全員に2枚ずつ裏向きで配り、手札を確認してください。共有カードはまだ出しません。</p><p class="blind-note">${escape(game.players[game.sb].name)}：SB ${number(game.players[game.sb].bet)}枚<br>${escape(game.players[game.bb].name)}：BB ${number(game.players[game.bb].bet)}枚 <span>支払い済み</span></p></div><button type="button" class="primary wide phase-next" data-do="advance">配り終えた · プリフロップへ</button>`;
+  if(game.phase==='between') {
+    const next=streets[game.round+1];
+    return `<div class="phase-copy"><p class="eyebrow">NEXT · ${next}</p><h2 id="phase-title" tabindex="-1">${game.round===0?'フロップを3枚公開。':`${next}を1枚公開。`}</h2><p>山札の一番上を1枚よけてから、${game.round===0?'共有カードを3枚':`${game.round===1?'4':'5'}枚目の共有カードを`}表向きにしてください。</p></div><button type="button" class="primary wide phase-next" data-do="advance">公開できた · ${next}へ</button>`;
   }
-  if (game.phase === 'betting') return bettingView();
-  if (game.phase === 'between') {
-    const draw = game.config.mode === 'draw';
-    const heading = draw ? '手札を交換してください。' : game.round===0 ? '真ん中に3枚、表向きに。' : '真ん中に、もう1枚。';
-    const text = draw ? '降りていない人は、いらないカードを裏向きで捨て、同じ枚数を受け取ります。交換しなくてもOK。全員の交換が終わったら進みます。' : game.round===0 ? '山札の一番上を1枚よけてから、共有カードを3枚公開してください。全員が同じカードを使います。' : `山札の一番上を1枚よけてから、${game.round===1?'4':'5'}枚目の共有カードを公開してください。`;
-    return `<h2 id="phase-title" class="phase-heading" tabindex="-1">${heading}</h2><p class="instruction">${text}</p><button type="button" class="primary wide next-button" data-do="advance">${draw?'交換できた · 次へ':'公開できた · 次へ'}</button>`;
-  }
-  if (game.phase === 'showdown') return showdownView();
+  if(game.phase==='showdown')return showdownView();
   return resultView();
 }
 function bettingView() {
-  const p = game.players[game.actor], o = actionOptions(game);
-  const hint = o.due === 0 ? '追加で出さずに続けるか、チップを出すか選べます。' : p.stack <= o.due ? `同じ枚数には${number(o.due)}枚必要ですが、残り${number(p.stack)}枚を全部出せば勝負に残れます。` : `続けるには、あと${number(o.call)}枚を出します。${o.canRaise ? '強いと思ったら、さらに上乗せもできます。' : '同じ枚数にそろえるか、降りるかを選びます。'}`;
-  const label = o.due === 0 ? '出さずに続ける' : p.stack <= o.due ? `残り${number(o.call)}枚を出す` : `${number(o.call)}枚を出す`;
-  const min = Math.min(o.min, o.max);
-  const quick = [...new Set([min, Math.min(o.max,min + (game.config.mode==='draw'?game.config.minBet:game.config.bb)),Math.min(o.max,min*2)])];
-  return `<div class="turn-heading"><h2 id="turn-title" tabindex="-1">${escape(p.name)}さん</h2><span class="turn-label">の番です</span></div><p class="instruction">${hint}</p>
-    <div class="action-grid"><button type="button" class="primary action" data-do="call">${label}<small>${o.due===0?'チェック · 追加は0枚':p.stack<=o.due?'オールイン · 勝負には残れる':'コール · 同じ枚数にそろえる'}</small></button><button type="button" class="action fold-action" data-do="fold">今回は降りる<small>フォールド · 出した分は戻らない</small></button></div>
-    ${o.canRaise ? `<div class="raise-box"><form id="raise-form"><div class="raise-title"><label for="raise-total">${game.currentBet===0?'チップを出して始める':'さらに上乗せする'}</label><span class="muted">${game.currentBet===0?'ベット':'レイズ'}</span></div><div class="raise-form"><input id="raise-total" type="number" inputmode="numeric" min="${min}" max="${o.max}" step="1" value="${min}" required aria-describedby="raise-hint"><button type="submit">合計を決めて出す</button></div><div class="quick-bets">${quick.map(amount=>`<button type="button" data-amount="${amount}">${number(amount)}枚</button>`).join('')}</div><p id="raise-hint" class="help-text">この周に出す合計です。${p.bet>0?`すでに出した${number(p.bet)}枚を含みます。` : ''}追加は <span id="raise-add">${number(min-p.bet)}</span> 枚。${o.max<o.min?'全額を出す場合だけ、この枚数で参加できます。':`最小${number(o.min)}枚。`}</p></form></div>` : o.due>0 && o.max>game.currentBet ? '<p class="help-text" style="margin-top:16px">今回は上乗せできません。必要な分だけ出すか、降りるかを選びます。</p>' : ''}
-    ${o.allInAllowed && p.stack>o.call ? `<button type="button" class="allin-button" data-do="allin">残り${number(p.stack)}枚をすべて出す（オールイン）</button>` : ''}`;
+  const p=game.players[game.actor],o=actionOptions(game),minimum=Math.min(o.min,o.max);
+  const quick=[...new Set([minimum,Math.min(o.max,minimum+game.config.bb),Math.min(o.max,minimum*2)])];
+  return `<div class="turn-summary"><div class="turn-identity"><p class="eyebrow">現在のプレイヤー</p><h2 id="turn-title" tabindex="-1" title="${escape(p.name)}">${escape(p.name)}</h2><p class="turn-committed">このラウンド ${number(p.bet)}枚 · このハンド ${number(p.committed)}枚</p></div><div class="own-stack"><span>持ち点（残り）</span><strong id="player-stack" class="${p.stack>=1000000?'large-stack':''}">${number(p.stack)}<small> 枚</small></strong></div></div>
+  <div class="action-pair">${choice('call',o.due===0?'チェック':'コール',o.due===0?'追加 0枚':`追加 ${number(o.call)}枚${p.stack<=o.due?' · オールイン':''}`,true)}${choice('fold','フォールド','このハンドを降りる')}</div>
+  ${o.canRaise?`<form id="raise-form" class="raise-box"><div class="raise-heading"><label for="raise-total">${game.currentBet===0?'ベット':'レイズ'} <span>このラウンドの合計</span></label>${infoButton('raise',game.currentBet===0?'ベット':'レイズ')}</div><div class="raise-controls"><div class="raise-input"><input id="raise-total" type="number" inputmode="numeric" min="${minimum}" max="${o.max}" step="1" required value="${minimum}" aria-describedby="raise-hint"><span>枚</span></div><button type="submit" class="raise-submit">${game.currentBet===0?'ベット':'レイズ'}する <small>追加 <span id="raise-add">${number(minimum-p.bet)}</span>枚</small></button></div><div class="raise-bottom"><p id="raise-hint">${o.max<o.min?'全額の場合のみ可能':`最小 ${number(o.min)}枚`}</p><div class="quick-bets">${quick.map(amount=>`<button type="button" data-amount="${amount}">${number(amount)}</button>`).join('')}</div></div></form>`:`<div class="raise-unavailable"><span>レイズ不可</span><small>${game.players.some(other=>other.id!==p.id&&other.inHand&&!other.folded&&other.stack>0)?'ベッティングが再開されていません':'相手はオールインしています'}</small>${infoButton('raise','レイズ')}</div>`}
+  ${o.allInAllowed&&p.stack>o.call?`<div class="allin-row ${preferences.showInfo?'has-info':''}"><button type="button" data-do="allin">オールイン <strong>${number(p.stack)}枚</strong></button>${infoButton('allin','オールイン')}</div>`:'<div class="no-allin-note">コールかフォールドを選んでください。</div>'}`;
 }
 function showdownView() {
-  const allPots = pots(game);
-  return `<h2 id="phase-title" class="phase-heading" tabindex="-1">カードを比べて、勝者を選ぶ。</h2><p class="instruction">降りていない人の手札を公開してください。同じ強さで引き分けなら、複数人を選びます。</p><form id="settle-form">${allPots.map((pot,i)=>`<fieldset class="pot-select"><legend>${allPots.length===1?'場のチップ':i===0?'メインポット':`サイドポット ${i}`} · ${number(pot.amount)}枚</legend>${pot.eligible.length===1?`<p class="automatic-award">${escape(game.players[pot.eligible[0]].name)}さんが受け取ります。</p>`:`<p class="help-text">${allPots.length>1?'この分を受け取れる人だけ表示しています。':'いちばん強い人を選んでください。'}</p><div class="winner-options">${pot.eligible.map(id=>`<label class="winner-option"><input type="checkbox" name="pot-${i}" value="${id}"><span>${escape(game.players[id].name)}</span></label>`).join('')}</div>`}</fieldset>`).join('')}<p id="settle-hint" class="help-text" role="status">勝った人を選ぶと配分できます。</p><button type="submit" id="settle-submit" class="primary wide next-button" ${allPots.every(p=>p.eligible.length===1)?'':'disabled'}>チップを配分する</button></form>`;
+  const list=pots(game);
+  return `<div class="phase-copy compact-copy"><p class="eyebrow">SHOWDOWN</p><h2 id="phase-title" tabindex="-1">勝者を選んでください。</h2><p>手札を公開して比較します。同点なら複数人を選択。</p></div><form id="settle-form" class="settle-form"><div class="settle-pots scroll-area">${list.map((pot,i)=>`<fieldset class="pot-select"><legend>${list.length===1?'ポット':i===0?'メインポット':`サイドポット ${i}`} · ${number(pot.amount)}枚</legend>${pot.eligible.length===1?`<p class="automatic-award">${escape(game.players[pot.eligible[0]].name)}さんに配分</p>`:`<div class="winner-options">${pot.eligible.map(id=>`<label class="winner-option"><input type="checkbox" name="pot-${i}" value="${id}"><span>${escape(game.players[id].name)}</span></label>`).join('')}</div>`}</fieldset>`).join('')}</div><p id="settle-hint" class="help-text" role="status">${list.every(p=>p.eligible.length===1)?'配分先を確認してください。':'各ポットの勝者を選んでください。'}</p><button type="submit" id="settle-submit" class="primary wide" ${list.every(p=>p.eligible.length===1)?'':'disabled'}>チップを配分する</button></form>`;
 }
 function resultView() {
-  const funded = game.players.filter(p=>p.stack>0);
-  const awards = game.result.awards.filter(a=>a.amount>0);
-  return `<h2 id="phase-title" class="phase-heading" tabindex="-1">${awards.length===1?`${escape(game.players[awards[0].id].name)}さんの勝ち。`:'チップを分けました。'}</h2><p class="instruction">${game.result.reason==='ほかの全員が降りたため'?'ほかの全員が降りたので、場のチップを受け取りました。':'選んだ勝者に、場のチップを配分しました。'}</p><p class="eyebrow">この勝負の増減</p><ul class="result-list">${game.result.changes.map(change=>`<li><span>${escape(game.players[change.id].name)}</span><strong class="${change.amount>0?'positive':''}">${signed(change.amount)} 枚</strong></li>`).join('')}</ul>
-  ${funded.length>=2 ? `<button type="button" class="primary wide next-button" data-do="start">次の勝負へ</button><p class="result-note">配る役が、次の人へ移ります。</p>` : `<p class="session-winner">${escape(funded[0]?.name||'')}さんに、すべてのチップが集まりました。</p><button type="button" class="primary wide next-button" data-do="new-game">新しいゲームを始める</button><div class="secondary-row"><button type="button" class="text-button" data-do="rebuy">チップを追加して続ける</button></div>`}`;
-}
-function contextTip() {
-  if (game.phase==='betting') return '<strong>迷ったら</strong>　強い手なら「出す」、勝てなさそうなら「降りる」。出さずに続けられるときは、チェックで様子を見られます。';
-  if (game.phase==='showdown') return '<strong>全額を出した人がいるとき</strong>　受け取れる範囲を自動で分けます。余りの1枚は、配る人の左から時計回りに渡します。';
-  if (game.phase==='complete') return '<strong>取り消したいとき</strong>　「1つ戻す」で配分前にも戻れます。チップの追加は、メニューから勝負の合間にできます。';
-  return '<strong>この1台で進めます</strong>　手番の人に選んでもらうか、1人が全員の操作を担当してください。カードの強さは、みんなで確認します。';
+  const funded=game.players.filter(p=>p.stack>0),awards=game.result.awards.filter(a=>a.amount>0);
+  return `<div class="phase-copy compact-copy"><p class="eyebrow">RESULT</p><h2 id="phase-title" tabindex="-1">${awards.length===1?`${escape(game.players[awards[0].id].name)}さんの勝ち`:'スプリットポット'}</h2><p>${game.result.reason==='ほかの全員が降りたため'?'ほかの全員がフォールドしました。':'勝者にポットを配分しました。'}</p></div><ul class="result-list scroll-area" aria-label="このハンドの増減">${game.result.changes.map(c=>`<li><span>${escape(game.players[c.id].name)}</span><strong class="${c.amount>0?'positive':''}">${signed(c.amount)}枚</strong></li>`).join('')}</ul>${funded.length>=2?'<button type="button" class="primary wide phase-next" data-do="start">次のハンドへ</button>':'<button type="button" class="primary wide phase-next" data-do="new-game">新しいゲームを始める</button><button type="button" class="text-button wide" data-do="rebuy">リバイして続ける</button>'}`;
 }
 
-function showModal(title, body, actions = '') {
-  if (modal.open) modal.close();
-  document.querySelector('#modal-content').innerHTML = `<div class="dialog-head"><h2 id="modal-title">${title}</h2><button type="button" data-do="close" aria-label="閉じる">×</button></div><div class="dialog-body">${body}</div>${actions?`<div class="dialog-actions">${actions}</div>`:''}`;
+function showModal(title,body,actions='') {
+  if(modal.open)modal.close();
+  document.querySelector('#modal-content').innerHTML=`<div class="dialog-head"><h2 id="modal-title">${title}</h2><button type="button" data-do="close" aria-label="閉じる">×</button></div><div class="dialog-body">${body}</div>${actions?`<div class="dialog-actions">${actions}</div>`:''}`;
   modal.showModal();
 }
-function confirmAction(title, body, label, callback) {
-  showModal(title,`<p>${body}</p>`,'<button type="button" data-do="close">やめる</button><button type="button" class="primary" id="confirm-action"></button>');
-  const confirm = document.querySelector('#confirm-action'); confirm.textContent = label;
-  confirm.addEventListener('click',()=>{modal.close(); callback();},{once:true});
+function confirmAction(title,body,label,callback) {
+  showModal(title,`<p>${body}</p>`,'<button type="button" data-do="close">キャンセル</button><button type="button" class="primary" id="confirm-action"></button>');
+  const button=document.querySelector('#confirm-action');button.textContent=label;
+  button.addEventListener('click',()=>{modal.close();callback();},{once:true});
+}
+function explain(kind) {
+  if(game?.phase!=='betting')return;
+  const p=game.players[game.actor],o=actionOptions(game);
+  const actual=kind==='call'&&o.due===0?'check':kind;
+  const titles={check:'チェック',call:'コール',fold:'フォールド',raise:game.currentBet===0?'ベット':'レイズ',allin:'オールイン'};
+  const target=Number(document.querySelector('#raise-total')?.value);
+  if(kind==='raise'&&!o.canRaise) {
+    const opponentCanAct=game.players.some(other=>other.id!==p.id&&other.inHand&&!other.folded&&other.stack>0);
+    showModal('レイズできない理由',`<p>${opponentCanAct?'直前の小さなオールインでは、すでに行動したあなたにレイズの権利が戻っていません。今回はコールかフォールドを選びます。':'残っている相手は全員オールインです。相手が追加できないため、必要な分のコールかフォールドを選びます。'}</p><p class="help-text">レイズが可能になる場合だけ、入力欄を表示します。</p>`);return;
+  }
+  let preview;
+  try {preview=actionPreview(game,actual,target);} catch(error) {showModal(`${titles[actual]}の説明`,`<p>${escape(error.message)}</p><p class="help-text">現在入力している額での説明です。額を修正して、もう一度確認してください。</p>`);return;}
+  const introductions={
+    check:'チップを追加せず、ハンドに残って次の人へ回します。',
+    call:preview.allin?'残りのチップをすべて出してコールします。足りない分を追加する必要はありません。':'現在のベットと同じ合計にそろえ、ハンドに残ります。',
+    fold:`このハンドを降ります。投入済みの${number(p.committed)}枚はポットに残り、取り戻せません。`,
+    raise:`このラウンドの合計を${number(preview.roundTotal)}枚に${game.currentBet===0?'設定':'引き上げ'}ます。すでに出した${number(p.bet)}枚を差し引き、${number(preview.paid)}枚を追加します。`,
+    allin:`残り${number(p.stack)}枚をすべて投入します。このハンドでこれ以上のチップを要求されることはありません。`
+  };
+  const tradeoffs={
+    check:'追加のチップを失うリスクなく様子を見られます。一方、相手に追加を要求したり、降りる判断を迫ったりはできません。',
+    call:'今の額で勝負に残れますが、相手に新しい追加額は要求しません。後の相手のレイズには、再び対応が必要になることがあります。',
+    fold:'これ以上の損失を避けられます。その代わり、このハンドのポットを獲得する権利を失います。',
+    raise:'相手に追加のチップを要求して、続けるか降りるかの判断を迫れます。その分、自分が失う可能性のあるチップも増えます。相手がレイズし返せる場合もあります。',
+    allin:'追加できる上限まで出す選択です。相手が全員降りればポットを獲得しますが、負けると今回出したチップをすべて失います。勝っても、自分が参加した範囲のポットまでしか受け取れません。'
+  };
+  let impact;
+  if(preview.wonByFold)impact=`<p>${escape(preview.winner)}さん以外が全員降りるため、${escape(preview.winner)}さんがポット${number(preview.potAfter)}枚を獲得します。</p>`;
+  else if(preview.nextPhase!=='betting')impact=`<p>必要なチップがそろうため、このベッティングラウンドは終了します。${preview.nextPhase==='showdown'?'次はショーダウンです。':'次は共有カードを公開します。'}</p>`;
+  else {
+    const pressure=(actual==='raise'||actual==='allin')&&preview.roundTotal>game.currentBet;
+    impact=`<p>${pressure?'新しいベットに届いていない相手はチェックできません。コール、権利があれば再レイズ、またはフォールドを選びます。':actual==='fold'?'相手に追加額は要求せず、相手同士の勝負が続きます。':actual==='check'?'相手もチェックできますが、ベットすることもできます。相手がベットしたら、あなたにも対応の手番が回ります。':'ベット額を引き上げないため、相手の支払い条件は変わりません。まだベットに届いていない相手はチェックできません。'}</p>
+    <div class="opponent-list">${preview.opponents.map(other=>`<div><strong>${escape(other.name)}</strong><span>${other.allin?'オールイン済み · 操作せず結果を待つ':other.responded?'対応済み · 追加不要':`追加 ${number(other.due)}枚${other.fullDue>other.due?'（残り全額）':''}<small>${other.actions.join(' / ')}</small>`}</span></div>`).join('')}</div><p class="help-text">今のベット額のまま相手の手番が来た場合です。その前に別の人がレイズすると条件が変わります。</p>`;
+  }
+  showModal(titles[actual],`<p>${introductions[actual]}</p><dl class="impact-numbers"><div><dt>自分の持ち点</dt><dd>${number(preview.stackBefore)} → <strong>${number(preview.stackAfter)}</strong>枚</dd></div><div><dt>ポット${preview.wonByFold?'（配分）':''}</dt><dd>${number(preview.potBefore)} → <strong>${number(preview.potAfter)}</strong>枚</dd></div></dl><section class="info-section"><h3>相手への影響</h3>${impact}</section><section class="info-section"><h3>この選択の特徴</h3><p>${tradeoffs[actual]}</p>${preview.allin?'<p class="help-text">以後は操作せず結果を待ちます。サイドポットは自動で分けます。</p>':''}</section>`);
+}
+function settings() {
+  showModal('設定',`<label class="setting-switch"><span><strong>アクションの説明ボタン</strong><small>ⓘ で、枚数の変化と相手への影響を確認できます。</small></span><input id="show-info" type="checkbox" role="switch" ${preferences.showInfo?'checked':''}></label><p class="help-text">オフにすると、プレイ画面の説明ボタンを非表示にします。設定はこのブラウザに保存されます。</p>`);
 }
 function help() {
-  showModal('使い方', `<p>手元のトランプで遊び、チップの計算だけをこの画面に任せます。スマホ1台で全員分を管理します。</p>
-    <section class="help-section"><h3>5枚ポーカーの進め方</h3><ol><li>全員が参加料を出し、カードを5枚ずつ受け取ります。参加料は自動で集めます。</li><li>時計回りに、チップを出すか降りるかを選びます。</li><li>残った人がいらないカードを交換し、もう一度ベットします。</li><li>手札を比べて勝者を選ぶと、チップを配分します。</li></ol><p>このサイトでは「役の条件なしで始める・交換は1回・ベット額は自由」のルールで遊びます。交換札が足りないときは、捨て札をよく混ぜて使ってください。</p></section>
-    <section class="help-section"><h3>ボタンの意味</h3><dl class="glossary"><dt>チェック — 出さずに続ける</dt><dd>この周のチップがそろっているときに選べます。勝負に残ったまま、次の人へ進みます。</dd><dt>コール — 同じ枚数にそろえる</dt><dd>先に出した人と同じ合計になるように、不足分だけを出します。</dd><dt>ベット・レイズ — チップを出す・上乗せする</dt><dd>入力するのは「この周で出す合計」。すでに出した分は自動で差し引きます。最低額は画面で案内します。</dd><dt>フォールド — 今回は降りる</dt><dd>この勝負には参加しません。出したチップは戻りませんが、次の勝負からまた参加できます。</dd><dt>オールイン — 残りをすべて出す</dt><dd>残りが足りなくても勝負には残れます。受け取れるのは自分が参加した分のポットまで。配分は自動で分けます。</dd></dl></section>
-    <section class="help-section"><h3>ホールデムの進め方</h3><p>自分だけのカード2枚と、真ん中の共有カード5枚から最も強い5枚を作ります。配札後・共有カード3枚・4枚目・5枚目の計4回ベットします。最初にチップを出す2人（ブラインド）は自動で交代します。2人のときは配る人が小ブラインドです。</p></section>
-    <section class="help-section"><h3>役の強さ（上ほど強い）</h3><ol class="hand-ranks"><li>ロイヤルフラッシュ</li><li>ストレートフラッシュ</li><li>フォーカード</li><li>フルハウス</li><li>フラッシュ</li><li>ストレート</li><li>スリーカード</li><li>ツーペア</li><li>ワンペア</li><li>ハイカード（役なし）</li></ol><p style="margin-top:10px">役が同じなら、役を作るカードの数字、残りの強いカードの順で比較します。スートに強弱はありません。Aは通常いちばん強く、A・2・3・4・5のストレートだけは最も弱い並びです。</p></section>
-    <section class="help-section"><h3>保存と取り消し</h3><p>操作のたびに、このブラウザだけに保存します。再読み込みしても続きから。「1つ戻す」は直前60回まで戻れます。配分や全額を出す操作も取り消せます。プライベートブラウズやブラウザのデータ削除では記録が消えます。</p><p>チップは点数です。カードは配らず、勝敗も自動判定しません。配る人の左から時計回りを基本に進めます。</p></section>`);
+  showModal('使い方・役の強さ',`<p>ノーリミットのテキサスホールデム専用です。スマホ1台を回すか、1人が全員分を操作してください。</p><section class="info-section"><h3>ハンドの流れ</h3><ol><li>2人のブラインドを自動支払い。全員にホールカードを2枚ずつ配ります。</li><li>プリフロップでベットします。</li><li>フロップ3枚、ターン1枚、リバー1枚を順に公開し、そのつどベットします。</li><li>ショーダウンで勝者を選ぶとポットを配分します。</li></ol><p>自分の2枚と共有カード5枚から、最も強い5枚を作ります。全員がフォールドした場合は、その場で残った人の勝ちです。</p></section><section class="info-section"><h3>アクションの説明</h3><p>各アクション横のⓘで、その時点の支払い、残りチップ、相手の選択肢を確認できます。レイズ入力は「このラウンドで出す合計」です。説明ボタンは設定で隠せます。</p></section><section class="info-section"><h3>役の強さ（上ほど強い）</h3><ol><li>ロイヤルフラッシュ</li><li>ストレートフラッシュ</li><li>フォーカード</li><li>フルハウス</li><li>フラッシュ</li><li>ストレート</li><li>スリーカード</li><li>ツーペア</li><li>ワンペア</li><li>ハイカード</li></ol><p>同じ役は数字とキッカーで比較します。スートに強弱はありません。A・2・3・4・5は最も弱いストレートです。</p></section><section class="info-section"><h3>保存・配分</h3><p>操作のたびにブラウザに保存します。「1つ戻す」は60アクションまで。リバイはハンドの合間にできます。同点の余り1枚は、ディーラーの左から時計回りに配ります。</p><p>カードの配布と勝敗判定は手元で行います。プライベートブラウズ終了やサイトデータ削除で記録は消えます。</p></section>`);
 }
 function menu() {
-  const betweenHands = ['ready','complete'].includes(game.phase);
-  showModal('ゲームのメニュー',`<button type="button" class="wide" data-do="rebuy" ${betweenHands?'':'disabled'}>チップを追加する</button><p class="help-text">追加できるのは、勝負を始める前か配分した後です。</p><button type="button" class="wide" data-do="help" style="margin-top:18px">使い方・役の強さ</button><button type="button" class="text-button danger wide" data-do="new-game" style="margin-top:18px">このゲームを終えて、最初から</button>`);
+  const between=['ready','complete'].includes(game.phase);
+  showModal('メニュー',`<div class="menu-buttons"><button type="button" data-do="players">全員のチップ</button><button type="button" data-do="rebuy" ${between?'':'disabled'}>リバイ（チップ追加）</button><button type="button" data-do="settings">設定</button><button type="button" data-do="help">使い方・役の強さ</button><button type="button" data-do="log">アクション履歴</button><button type="button" class="danger text-button" data-do="new-game">ゲームを終了して最初から</button></div><p class="help-text">リバイはハンド開始前・終了後にできます。</p>`);
 }
 function rebuy() {
-  if (!['ready','complete'].includes(game.phase)) return;
-  showModal('チップを追加する',`<form id="rebuy-form"><label class="field"><span>追加する人</span><select name="player">${game.players.map(p=>`<option value="${p.id}">${escape(p.name)}（${number(p.stack)}枚）</option>`).join('')}</select></label><label class="field"><span>追加する枚数</span><input name="amount" type="number" inputmode="numeric" min="1" max="1000000" step="1" required value="${game.config.starting}"></label><button type="submit" class="primary wide" style="margin-top:24px">この枚数を追加する</button></form>`);
+  if(!['ready','complete'].includes(game.phase))return;
+  showModal('リバイ',`<form id="rebuy-form"><label class="field"><span>プレイヤー</span><select name="player">${game.players.map(p=>`<option value="${p.id}">${escape(p.name)}（残り${number(p.stack)}枚）</option>`).join('')}</select></label><label class="field"><span>追加するチップ</span><input name="amount" type="number" inputmode="numeric" min="1" max="1000000" step="1" required value="${game.config.starting}"></label><button type="submit" class="primary wide start-button">追加する</button></form>`);
 }
 function newGame() {
-  confirmAction('最初から始めますか？','今のチップと進行状況をリセットします。同じメンバーで設定し直せます。','最初から始める',()=>{
-    if (!syncBeforeChange()) return;
-    draft = {...game.config,names:game.players.map(p=>p.name)}; saveDraft(); game = null; history = []; revision = null;
-    try {localStorage.removeItem(KEY);} catch {storageAvailable = false;}
-    render(); window.scrollTo({top:0,behavior:'instant'});
+  confirmAction('最初から始めますか？','現在のチップと進行をリセットします。同じメンバーで設定し直せます。','最初から始める',()=>{
+    if(!syncBeforeChange())return;
+    cancelEffects();draft={...game.config,names:game.players.map(p=>p.name),mode:'holdem'};saveDraft();game=null;history=[];revision=null;
+    try {localStorage.removeItem(KEY);} catch {storageAvailable=false;}
+    render();window.scrollTo({top:0,behavior:'instant'});
   });
 }
+function getSelections() {return pots(game).map((pot,i)=>pot.eligible.length===1?pot.eligible:[...document.querySelectorAll(`input[name="pot-${i}"]:checked`)].map(input=>Number(input.value)));}
 
-document.querySelector('#help-button').addEventListener('click', help);
-document.addEventListener('click', event => {
-  const button = event.target.closest('button'); if (!button || button.disabled) return;
-  if (button.dataset.mode) {
-    const mode = button.dataset.mode;
-    if (mode==='draw' && draft.names.length>6) {toast('5枚ポーカーは6人までです。先に参加者を減らしてください。');return;}
-    draft.mode = mode; saveDraft(); render(); return;
-  }
-  if (button.dataset.remove !== undefined) {draft.names.splice(Number(button.dataset.remove),1);saveDraft();render();return;}
-  if (button.dataset.amount !== undefined) {
-    const input = document.querySelector('#raise-total'); input.value = button.dataset.amount; input.dispatchEvent(new Event('input',{bubbles:true})); return;
-  }
-  switch (button.dataset.do) {
-    case 'add-player': draft.names.push(''); saveDraft(); render(); document.querySelector(`[data-name="${draft.names.length-1}"]`)?.focus(); break;
-    case 'start': change({type:'start'}); break;
-    case 'advance': change({type:'advance'}); break;
-    case 'call': change({type:'call'}); break;
-    case 'fold': {
-      const options=actionOptions(game);
-      if(options?.due===0) confirmAction('今回は降りますか？','いまは追加のチップなしで続けられます。降りると、この勝負から抜けます。','降りる',()=>change({type:'fold'}));
-      else change({type:'fold'});
-      break;
-    }
-    case 'allin': {
-      const p=game.players[game.actor];
-      confirmAction('残りをすべて出しますか？',`${escape(p.name)}さんの残り${number(p.stack)}枚を出します。この勝負中は、それ以上のチップを追加できません。`,'すべて出す',()=>change({type:'allin'})); break;
-    }
-    case 'undo': undo(); break;
-    case 'menu': menu(); break;
-    case 'help': help(); break;
-    case 'close': modal.close(); break;
-    case 'rebuy': rebuy(); break;
-    case 'new-game': newGame(); break;
+document.querySelector('#help-button').addEventListener('click',help);
+document.querySelector('#settings-button').addEventListener('click',settings);
+document.addEventListener('click',event=>{
+  const button=event.target.closest('button');if(!button||button.disabled||busy)return;
+  if(button.dataset.info){explain(button.dataset.info);return;}
+  if(button.dataset.remove!==undefined){draft.names.splice(Number(button.dataset.remove),1);saveDraft();render();return;}
+  if(button.dataset.amount!==undefined){const input=document.querySelector('#raise-total');input.value=button.dataset.amount;input.dispatchEvent(new Event('input',{bubbles:true}));return;}
+  const origin=button.getBoundingClientRect();
+  switch(button.dataset.do) {
+    case 'add-player':if(draft.names.length>=10)break;draft.names.push('');saveDraft();render();document.querySelector(`[data-name="${draft.names.length-1}"]`)?.focus();break;
+    case 'start':change({type:'start'},origin);break;
+    case 'advance':change({type:'advance'},origin);break;
+    case 'call':change({type:'call'},origin);break;
+    case 'fold':change({type:'fold'},origin);break;
+    case 'allin':confirmAction('オールインしますか？',`残り${number(game.players[game.actor].stack)}枚をすべて投入します。`,'オールイン',()=>change({type:'allin'},origin));break;
+    case 'undo':undo();break;
+    case 'menu':menu();break;
+    case 'settings':settings();break;
+    case 'help':help();break;
+    case 'close':modal.close();break;
+    case 'players':showModal('チップ一覧',tableView());break;
+    case 'log':showModal('アクション履歴',game.log.length?`<ol class="action-log">${game.log.map(text=>`<li>${escape(text)}</li>`).join('')}</ol>`:'<p>まだアクションはありません。</p>');break;
+    case 'rebuy':rebuy();break;
+    case 'new-game':newGame();break;
   }
 });
 document.addEventListener('input',event=>{
   const input=event.target;
-  if (!game && input.closest('#setup-form')) {
-    if(input.dataset.name!==undefined) draft.names[Number(input.dataset.name)]=input.value;
-    else if(input.name) draft[input.name]=input.value===''?'':Number(input.value);
-    saveDraft();
-    const error = document.querySelector('#setup-error'); if(error) error.hidden=true;
+  if(!game&&input.closest('#setup-form')) {
+    if(input.dataset.name!==undefined)draft.names[Number(input.dataset.name)]=input.value;
+    else if(input.name)draft[input.name]=input.value===''?'':Number(input.value);
+    saveDraft();const error=document.querySelector('#setup-error');if(error)error.hidden=true;
   }
-  if(input.id==='raise-total' && game?.phase==='betting') {
+  if(input.id==='raise-total'&&game?.phase==='betting') {
     const added=Number(input.value)-game.players[game.actor].bet;
     document.querySelector('#raise-add').textContent=Number.isFinite(added)?number(Math.max(0,added)):'—';
   }
 });
 document.addEventListener('change',event=>{
-  if(!event.target.closest('#settle-form')) return;
-  const selections=getSelections(), list=pots(game);
-  const ready=list.every((pot,i)=>pot.eligible.length===1||selections[i].length>0);
-  document.querySelector('#settle-submit').disabled=!ready;
-  const hint=document.querySelector('#settle-hint');
-  hint.textContent=ready?'選んだ人に配分します。間違えても「1つ戻す」で戻せます。':'それぞれのポットで勝った人を選んでください。';
-});
-function getSelections() {
-  return pots(game).map((pot,i)=>pot.eligible.length===1?pot.eligible:[...document.querySelectorAll(`input[name="pot-${i}"]:checked`)].map(input=>Number(input.value)));
-}
-document.addEventListener('submit',event=>{
-  const form=event.target;
-  if(!['setup-form','raise-form','settle-form','rebuy-form'].includes(form.id)) return;
-  event.preventDefault();
-  if(form.id==='setup-form') {
-    if(!syncBeforeChange()) return;
-    try {
-      game=createGame(draft.names,draft);history=[];corruptSave=false;persist();render(true);window.scrollTo({top:0,behavior:'instant'});
-    } catch(error) {game=null;const target=document.querySelector('#setup-error');target.textContent=error.message;target.hidden=false;}
-  } else if(form.id==='raise-form') {
-    const target=Number(document.querySelector('#raise-total').value), options=actionOptions(game);
-    if(target===options.max) confirmAction('残りをすべて出しますか？',`残り${number(game.players[game.actor].stack)}枚を出します。`,'すべて出す',()=>change({type:'raise',target}));
-    else change({type:'raise',target});
-  } else if(form.id==='settle-form') change({type:'settle',selections:getSelections()});
-  else if(form.id==='rebuy-form') {
-    const data=new FormData(form);
-    if(change({type:'rebuy',id:Number(data.get('player')),amount:Number(data.get('amount'))})) {modal.close();toast('チップを追加しました。');}
+  if(event.target.id==='show-info') {
+    preferences.showInfo=event.target.checked;
+    try {localStorage.setItem(PREF_KEY,JSON.stringify(preferences));} catch {toast('設定は、このページを閉じるまで反映します。');}
+    render();return;
   }
+  if(!event.target.closest('#settle-form'))return;
+  const selections=getSelections(),ready=pots(game).every((pot,i)=>pot.eligible.length===1||selections[i].length>0);
+  document.querySelector('#settle-submit').disabled=!ready;
+  document.querySelector('#settle-hint').textContent=ready?'選んだ勝者に配分します。':'各ポットの勝者を選んでください。';
 });
+document.addEventListener('submit',async event=>{
+  const form=event.target;
+  if(!['setup-form','raise-form','settle-form','rebuy-form'].includes(form.id))return;
+  event.preventDefault();if(busy)return;
+  if(form.id==='setup-form') {
+    if(!syncBeforeChange())return;
+    try {game=createGame(draft.names,{...draft,mode:'holdem'});history=[];corruptSave=false;persist();render();window.scrollTo({top:0,behavior:'instant'});focusPhase();}
+    catch(error){game=null;const target=document.querySelector('#setup-error');target.textContent=error.message;target.hidden=false;}
+  } else if(form.id==='raise-form') {
+    const target=Number(document.querySelector('#raise-total').value),options=actionOptions(game),origin=event.submitter?.getBoundingClientRect();
+    if(target===options.max)confirmAction('オールインしますか？',`残り${number(game.players[game.actor].stack)}枚をすべて投入します。`,'オールイン',()=>change({type:'raise',target},origin));
+    else change({type:'raise',target},origin);
+  } else if(form.id==='settle-form')change({type:'settle',selections:getSelections()});
+  else {const data=new FormData(form);modal.close();if(await change({type:'rebuy',id:Number(data.get('player')),amount:Number(data.get('amount'))}))toast('チップを追加しました。');}
+});
+if(migrated){persist();toast('以前のルールのチップを戻し、ホールデムの開始前に切り替えました。');}
 render();
