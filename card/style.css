@@ -214,6 +214,22 @@ dialog::backdrop { background: #15281d66; }
 .menu-buttons > button { font-size: 13px; }
 .danger { color: #a53d32; }
 .action-log { padding-left: 20px; margin: 0; font-size: 12px; line-height: 2; }
+.game-footer > button[data-do=rank] { color: var(--green); }
+.ranking-note { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+.ranking-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.ranking-table thead th { font-size: 10px; color: var(--muted); font-weight: 400; padding: 0 7px 10px; text-align: left; border-bottom: 1px solid var(--line); }
+.ranking-table thead th:first-child { width: 40px; }
+.ranking-table thead th:last-child { width: 43%; text-align: right; }
+.ranking-table tbody th, .ranking-table tbody td { padding: 13px 7px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.ranking-table tbody th { font-size: 12px; text-align: left; font-weight: 600; overflow-wrap: anywhere; }
+.ranking-table tbody th > small { display: block; margin-top: 4px; font-size: 10px; font-weight: 400; }
+.ranking-table tbody td:first-child { font-size: 20px; color: #344c3b; font-weight: 650; font-variant-numeric: tabular-nums; }
+.ranking-table tbody td small { font-size: 9px; font-weight: 400; margin-left: 3px; color: var(--muted); }
+.ranking-table tbody td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.ranking-table tbody td > strong { font-size: 17px; white-space: nowrap; }
+.ranking-breakdown { display: block; font-size: 9px; color: var(--muted); margin-top: 5px; }
+.ranking-table .rank-first { background: var(--soft); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .toast { position: fixed; z-index: 60; left: 50%; bottom: max(22px, env(safe-area-inset-bottom)); transform: translateX(-50%); max-width: calc(100% - 32px); width: max-content; color: white; background: #263b2e; border-radius: 8px; font-size: 12px; padding: 12px 16px; box-shadow: 0 3px 18px #0002; }
 .loading, .notice { padding: 24px; color: var(--muted); font-size: 13px; }
 

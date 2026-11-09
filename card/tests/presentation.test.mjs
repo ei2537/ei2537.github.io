@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createGame,transition,validateGame,potTotal} from '../engine.mjs';
-import {migrateToHoldem,actionPreview,chipColumns} from '../presentation.mjs';
+import {migrateToHoldem,actionPreview,chipColumns,standings} from '../presentation.mjs';
 
 const step=(game,type,extra={})=>transition(game,{type,...extra});
 function table(stacks=[1000,1000,1000]) {
@@ -64,4 +64,25 @@ test('chip denominations retain the exact pot amount while keeping visual stacks
     assert.equal(columns.reduce((sum,c)=>sum+c.value*c.count,0),amount);
     assert.ok(columns.length<=4&&columns.every(c=>c.visible<=6&&c.visible>0));
   }
+});
+test('standings sort chips descending, preserve seats, and share ranks on a tie',()=>{
+  const game=createGame(['A','B','C','D'],{mode:'holdem'});
+  game.players.forEach((p,i)=>{p.stack=[900,1500,1500,100][i];});
+  const before=JSON.stringify(game),rows=standings(game);
+  assert.deepEqual(rows.map(r=>[r.id,r.rank,r.total]),[[1,1,1500],[2,1,1500],[0,3,900],[3,4,100]]);
+  assert.equal(JSON.stringify(game),before);
+});
+test('posting blinds and betting do not lower provisional standings before settlement',()=>{
+  const game=step(table([1000,1000,1000,1000]),'raise',{target:100});
+  assert.ok(standings(game).every(row=>row.rank===1&&row.total===1000&&row.change===0));
+  assert.equal(standings(game).find(row=>row.id===3).stack,900);
+});
+test('paying a pot updates ranks and net chip changes',()=>{
+  let game=step(table([1000,1000,1000,1000]),'raise',{target:100});
+  game=step(step(step(game,'fold'),'fold'),'fold');
+  assert.equal(game.phase,'complete');
+  assert.deepEqual(standings(game).map(r=>[r.id,r.rank,r.change]),[[3,1,30],[0,2,0],[1,3,-10],[2,4,-20]]);
+  game=step(game,'rebuy',{id:2,amount:1000});
+  const leader=standings(game)[0];
+  assert.equal(leader.id,2);assert.equal(leader.total,1980);assert.equal(leader.change,-20);
 });

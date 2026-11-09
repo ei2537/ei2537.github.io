@@ -1,5 +1,5 @@
 import { VERSION, createGame, transition, actionOptions, potTotal, pots, validateGame } from './engine.mjs';
-import { migrateToHoldem, actionPreview, chipColumns } from './presentation.mjs';
+import { migrateToHoldem, actionPreview, chipColumns, standings } from './presentation.mjs?v=3';
 
 const KEY = 'poker-chips:v1', DRAFT_KEY = `${KEY}:setup`, PREF_KEY = `${KEY}:preferences`;
 const app = document.querySelector('#app'), modal = document.querySelector('#modal');
@@ -180,7 +180,11 @@ function potView() {
   return `<div class="pot-area"><div><p class="eyebrow">${game.phase==='complete'?'獲得ポット':'POT'}</p><p class="pot-number"><strong id="pot-amount">${number(total)}</strong><span>枚</span></p></div>${chipArt(total)}<div class="pot-bet"><span>現在のベット</span><strong>${number(game.currentBet)}<small> 枚</small></strong></div></div>`;
 }
 function gameView() {
-  return `<div class="game-shell"><div class="game-bar"><div><h1>${game.hand?`ハンド ${game.hand}`:'テーブル準備'}</h1><span>BLINDS ${number(game.config.sb)} / ${number(game.config.bb)}</span></div><div class="game-tools"><button type="button" class="text-button" data-do="undo" ${history.length?'':'disabled'}>1つ戻す</button><button type="button" class="text-button" data-do="menu">メニュー</button></div></div>${stageTrack()}<div class="play-layout"><section class="play-panel" aria-label="ゲームの操作">${potView()}<div class="phase-content ${game.phase==='betting'?'betting-content':''}">${phaseView()}</div></section><aside class="desktop-table">${tableView()}</aside></div><div class="game-footer"><button type="button" data-do="players">全員のチップ</button><span class="save-indicator ${storageAvailable?'':'unsaved'}">${storageAvailable?'保存済み':'保存できません'}</span><button type="button" data-do="log">アクション履歴</button></div></div>`;
+  return `<div class="game-shell"><div class="game-bar"><div><h1>${game.hand?`ハンド ${game.hand}`:'テーブル準備'}</h1><span>BLINDS ${number(game.config.sb)} / ${number(game.config.bb)}</span></div><div class="game-tools"><button type="button" class="text-button" data-do="undo" ${history.length?'':'disabled'}>1つ戻す</button><button type="button" class="text-button" data-do="menu">メニュー</button></div></div>${stageTrack()}<div class="play-layout"><section class="play-panel" aria-label="ゲームの操作">${potView()}<div class="phase-content ${game.phase==='betting'?'betting-content':''}">${phaseView()}</div></section><aside class="desktop-table">${tableView()}</aside></div><div class="game-footer"><button type="button" data-do="players">全員のチップ</button><span class="save-indicator ${storageAvailable?'':'unsaved'}">${storageAvailable?'保存済み':'保存できません'}</span><button type="button" data-do="rank">順位表</button></div></div>`;
+}
+function rankingView() {
+  const provisional=!['ready','complete'].includes(game.phase);
+  return `<p class="ranking-note">${provisional?'投入済みを含む暫定順位です。ポットの配分後に確定します。':'チップの多い順に表示しています。同じ枚数は同順位です。'}</p><table class="ranking-table"><caption class="sr-only">チップ数によるプレイヤー順位</caption><thead><tr><th scope="col">順位</th><th scope="col">プレイヤー</th><th scope="col">チップ</th></tr></thead><tbody>${standings(game).map(row=>`<tr class="${row.rank===1?'rank-first':''}"><td>${row.rank}<small>位</small></td><th scope="row"><span>${escape(row.name)}</span><small class="${row.change>0?'positive':''}">増減 ${signed(row.change)}枚</small></th><td><strong>${number(row.total)}</strong><small>枚</small>${provisional?`<span class="ranking-breakdown">手元 ${number(row.stack)} / 投入 ${number(row.committed)}</span>`:''}</td></tr>`).join('')}</tbody></table><p class="help-text">チップは「手元＋投入済み」の合計です。増減はスタートチップとリバイ分を差し引いた値です。</p>`;
 }
 function tableView() {
   return `<div class="table-wrap"><h2>全員のチップ</h2><table class="players-table"><thead><tr><th scope="col">プレイヤー</th><th scope="col">残り</th><th scope="col">投入済み</th></tr></thead><tbody>${game.players.map((p,i)=>{
@@ -273,7 +277,7 @@ function help() {
 }
 function menu() {
   const between=['ready','complete'].includes(game.phase);
-  showModal('メニュー',`<div class="menu-buttons"><button type="button" data-do="players">全員のチップ</button><button type="button" data-do="rebuy" ${between?'':'disabled'}>リバイ（チップ追加）</button><button type="button" data-do="settings">設定</button><button type="button" data-do="help">使い方・役の強さ</button><button type="button" data-do="log">アクション履歴</button><button type="button" class="danger text-button" data-do="new-game">ゲームを終了して最初から</button></div><p class="help-text">リバイはハンド開始前・終了後にできます。</p>`);
+  showModal('メニュー',`<div class="menu-buttons"><button type="button" data-do="rank">順位表</button><button type="button" data-do="players">全員のチップ</button><button type="button" data-do="rebuy" ${between?'':'disabled'}>リバイ（チップ追加）</button><button type="button" data-do="settings">設定</button><button type="button" data-do="help">使い方・役の強さ</button><button type="button" data-do="log">アクション履歴</button><button type="button" class="danger text-button" data-do="new-game">ゲームを終了して最初から</button></div><p class="help-text">リバイはハンド開始前・終了後にできます。</p>`);
 }
 function rebuy() {
   if(!['ready','complete'].includes(game.phase))return;
@@ -309,6 +313,7 @@ document.addEventListener('click',event=>{
     case 'settings':settings();break;
     case 'help':help();break;
     case 'close':modal.close();break;
+    case 'rank':showModal('順位表',rankingView());break;
     case 'players':showModal('チップ一覧',tableView());break;
     case 'log':showModal('アクション履歴',game.log.length?`<ol class="action-log">${game.log.map(text=>`<li>${escape(text)}</li>`).join('')}</ol>`:'<p>まだアクションはありません。</p>');break;
     case 'rebuy':rebuy();break;

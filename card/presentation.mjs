@@ -50,3 +50,15 @@ export function chipColumns(amount) {
     return {value,count,visible:Math.min(6,count)};
   }).filter(column => column.count > 0);
 }
+
+export function standings(game) {
+  // Bets are still unsettled during a hand. Count them until the pot is paid,
+  // so taking a turn or posting a blind does not arbitrarily lower a rank.
+  const rows = game.players.map(player => ({
+    id:player.id, name:player.name, stack:player.stack, committed:player.committed,
+    total:player.stack + player.committed,
+    change:player.stack + player.committed - player.baseline
+  })).sort((a,b) => b.total - a.total || a.id - b.id);
+  rows.forEach((row,index) => {row.rank = index > 0 && row.total === rows[index-1].total ? rows[index-1].rank : index + 1;});
+  return rows;
+}
