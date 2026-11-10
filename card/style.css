@@ -362,3 +362,7 @@ dialog::backdrop { background: #15281d66; }
 .offline-status-text { font-weight: 650; margin-bottom: 14px; }
 .offline-steps { padding-left: 20px; margin: 16px 0; }
 .offline-steps li + li { margin-top: 10px; }
+
+/* Keep Home Screen apps below the iPhone status area while retaining 100dvh. */
+.site-header { height: calc(var(--header) + env(safe-area-inset-top, 0px)); padding-top: env(safe-area-inset-top, 0px); }
+.playing-app { height: calc(100dvh - var(--header) - env(safe-area-inset-top, 0px)); }

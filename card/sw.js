@@ -1,11 +1,11 @@
 /* Bump this release and the versioned asset URLs together when shipping. */
-const RELEASE = '4';
+const RELEASE = '5';
 const CACHE_PREFIX = 'poker-card-offline-';
 const CACHE = `${CACHE_PREFIX}${RELEASE}`;
 const BASE = new URL('./', self.location.href);
 const SHELL = [
-  './', './index.html', './style.css?v=4', './app.mjs?v=4',
-  './engine.mjs', './presentation.mjs?v=3', './offline.mjs?v=4',
+  './', './index.html', './style.css?v=5', './app.mjs?v=5',
+  './engine.mjs', './presentation.mjs?v=3', './offline.mjs?v=5',
   './manifest.webmanifest', './icon.svg',
   './icon-180.png', './icon-192.png', './icon-512.png'
 ].map(path => new URL(path, BASE).href);

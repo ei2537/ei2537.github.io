@@ -1,4 +1,4 @@
-const RELEASE = '4';
+const RELEASE = '5';
 export const offlineStatus = {state:'loading',message:'オフライン利用を準備中…'};
 let pending = null;
 function update(state,message) {

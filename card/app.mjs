@@ -1,4 +1,4 @@
-import { offlineStatus, prepareOffline } from './offline.mjs?v=4';
+import { offlineStatus, prepareOffline } from './offline.mjs?v=5';
 import { VERSION, createGame, transition, actionOptions, potTotal, pots, validateGame } from './engine.mjs';
 import { migrateToHoldem, actionPreview, chipColumns, standings } from './presentation.mjs?v=3';
 
