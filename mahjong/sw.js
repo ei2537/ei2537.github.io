@@ -1,6 +1,6 @@
-const RELEASE='1',CACHE_PREFIX='riichi-mahjong-offline-',CACHE=CACHE_PREFIX+RELEASE;
+const RELEASE='2',CACHE_PREFIX='riichi-mahjong-offline-',CACHE=CACHE_PREFIX+RELEASE;
 const BASE=new URL('./',self.location.href);
-const SHELL=['./','./index.html','./style.css?v=1','./app.mjs?v=1','./engine.mjs','./scoring.mjs','./vendor/majiang.mjs','./vendor/LICENSE','./offline.mjs?v=1','./manifest.webmanifest','./icon.svg','./icon-180.png','./icon-192.png','./icon-512.png'].map(path=>new URL(path,BASE).href);
+const SHELL=['./','./index.html','./style.css?v=2','./app.mjs?v=2','./engine.mjs?v=2','./scoring.mjs?v=2','./rules.mjs?v=2','./vendor/majiang.mjs?v=2','./vendor/LICENSE','./offline.mjs?v=2','./manifest.webmanifest','./icon.svg','./icon-180.png','./icon-192.png','./icon-512.png'].map(path=>new URL(path,BASE).href);
 const URLS=new Set(SHELL);
 async function ready(){const cache=await caches.open(CACHE);return (await Promise.all(SHELL.map(url=>cache.match(url)))).every(Boolean);}
 async function prepare(){const cache=await caches.open(CACHE);await cache.addAll(SHELL.map(url=>new Request(url,{cache:'reload'})));}

@@ -1,3 +1,5 @@
+// Local extensions: sanma tsumo payments and extracted-North bonus han.
+// Upstream modules and MIT license are documented in ../README.md.
 /* @kobalab/majiang-core 1.4.1; upstream 7e964296dd8eb5ff5a32f8182acdc6a0c2a81cbb
 MIT License
 
@@ -1219,19 +1221,27 @@ function get_defen(fu, hupai, rongpai, param) {
         fenpei[baojia]  -= defen + chang * 300;
     }
     else {
+        // Local sanma adapter: the unused North seat never pays.
+        const player_count = param.player_count === 3 ? 3 : 4;
         let zhuangjia = Math.ceil(base * 2 / 100) * 100;
         let sanjia    = Math.ceil(base     / 100) * 100;
+        if (player_count === 3 && param.tsumo_split) {
+            const missing = menfeng === 0 ? zhuangjia : sanjia;
+            const extra = Math.ceil(missing / 2 / 100) * 100;
+            zhuangjia += extra;
+            sanjia += extra;
+        }
         if (menfeng == 0) {
-            defen = zhuangjia * 3;
-            for (let l = 0; l < 4; l++) {
+            defen = zhuangjia * (player_count - 1);
+            for (let l = 0; l < player_count; l++) {
                 if (l == menfeng)
                         fenpei[l] += defen     + chang * 300 + lizhi * 1000;
                 else    fenpei[l] -= zhuangjia + chang * 100;
             }
         }
         else {
-            defen = zhuangjia + sanjia * 2;
-            for (let l = 0; l < 4; l++) {
+            defen = zhuangjia + sanjia * (player_count - 2);
+            for (let l = 0; l < player_count; l++) {
                 if (l == menfeng)
                         fenpei[l] += defen     + chang * 300 + lizhi * 1000;
                 else if (l == 0)
@@ -1263,6 +1273,8 @@ function hule(shoupai, rongpai, param) {
     let pre_hupai  = get_pre_hupai(param.hupai);
     let post_hupai = get_post_hupai(shoupai, rongpai,
                                     param.baopai, param.fubaopai);
+    // Local sanma adapter: bonus han are added only after a real yaku exists.
+    if (param.nuki_dora > 0) post_hupai.push({name: '抜きドラ', fanshu: param.nuki_dora});
 
     for (let mianzi of hule_mianzi(shoupai, rongpai)) {
 

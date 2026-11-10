@@ -63,7 +63,7 @@ test('the offline shell covers all HTML, JavaScript imports, and manifest icons'
   const app=harness(),shell=new Set(app.shell());
   const html=await readFile(new URL('index.html',root),'utf8');
   for(const match of html.matchAll(/(?:href|src)="(\.\/[^\"]+)"/g))assert.ok(shell.has(new URL(match[1],'https://example.test/mahjong/').href),match[1]);
-  for(const file of ['app.mjs','engine.mjs','scoring.mjs','offline.mjs']) {
+  for(const file of ['app.mjs','engine.mjs','scoring.mjs','rules.mjs','offline.mjs']) {
     const source=await readFile(new URL(file,root),'utf8');
     for(const match of source.matchAll(/(?:from\s*|import\s*)['"](\.\/[^'"]+)['"]/g))assert.ok(shell.has(new URL(match[1],'https://example.test/mahjong/').href),match[1]);
   }
